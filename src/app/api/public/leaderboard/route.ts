@@ -4,7 +4,13 @@ import Team from '@/models/Team'
 import Round from '@/models/Round'
 
 export async function GET() {
-  await connectDB()
+  try {
+    await connectDB()
+  } catch (e) {
+    console.warn('public leaderboard GET: DB not available during build, returning empty teams')
+    return NextResponse.json({ teams: [] })
+  }
+
   // fetch teams + their per-round points
   const teams = await Team.find().lean()
   const rounds = await Round.find({ roundNumber: { $in: [1,2,3,4] } }).lean()
