@@ -1,0 +1,217 @@
+/* Import magical serif font */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap');
+
+:root {
+  --hp-bg: #0b0f13;
+  --hp-card: #0f1720;
+  --hp-accent: #c9a52a;
+  --hp-muted: #9aa6b2;
+}
+
+/* Reset & body */
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--hp-bg);
+  color: white;
+  overflow-x: hidden;
+}
+
+.h1-hp {
+  font-family: 'Cinzel', serif;
+}
+
+/* Animations */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-18px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes spark {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  10% { opacity: 1; transform: translateY(-20px) scale(1); }
+  100% { transform: translateY(-60px) scale(0.2); opacity: 0; }
+}
+
+.animate-float {
+  animation: float 8s ease-in-out infinite;
+}
+
+.animate-spark {
+  animation: spark 3.2s linear infinite;
+}
+
+/* Portal door */
+.portal-door {
+  width: 288px;
+  height: 384px;
+  border-radius: 2rem;
+  backdrop-filter: blur(6px);
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.portal-door:hover {
+  transform: scale(1.06) rotate(0.8deg);
+}
+
+/* Magical circle */
+.portal-circle {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 256px;
+  height: 256px;
+  border-radius: 50%;
+  opacity: 0.4;
+  filter: blur(3rem);
+  background: radial-gradient(circle at 30% 30%, rgba(201,165,42,0.35), transparent 40%);
+  pointer-events: none;
+}
+
+/* Button */
+.portal-button {
+  padding: 0.5rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  border: 2px solid rgba(255,255,255,0.2);
+  backdrop-filter: brightness(1.25);
+  cursor: pointer;
+  color: white;
+  text-decoration: none;
+  transition: transform 0.2s ease;
+}
+
+.portal-button:hover {
+  transform: scale(1.05);
+}
+
+/* Floor glow */
+.floor-glow {
+  width: 160px;
+  height: 80px;
+  border-radius: 50%;
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0.5;
+  filter: blur(2rem);
+  background: linear-gradient(90deg,#c9a52a,#ffd67a);
+}
+
+/* Page layout */
+.homepage {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.homepage img.bg-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(0.75);
+  z-index: 0;
+}
+
+.homepage .overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0,0,0,0.6);
+  z-index: 1;
+}
+
+.homepage main {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 3rem;
+  padding: 2rem;
+}
+
+.homepage header h1 {
+  font-size: 4rem;
+  font-weight: 900;
+  color: var(--hp-accent);
+  text-shadow: 0 0 20px rgba(201,165,42,0.5);
+  margin: 0;
+}
+
+.homepage header p {
+  margin-top: 0.5rem;
+  color: var(--hp-muted);
+  font-size: 1.25rem;
+}
+
+.portal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+  justify-content: center;
+}
+
+/* Floating cinematic mist */
+.mist {
+  position: absolute;
+  bottom: -80px;
+  left: 0;
+  width: 100%;
+  height: 24rem;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.02), transparent);
+  filter: blur(3rem);
+  opacity: 0.4;
+  animation: float 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Sparks */
+.spark {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  position: absolute;
+  background-color: white;
+}
+
+.spark-1 {
+  left: 10%;
+  top: 20%;
+  opacity: 0.8;
+  animation: spark 3.2s linear infinite;
+}
+
+.spark-2 {
+  right: 20%;
+  top: 40%;
+  opacity: 0.6;
+  animation: spark 3.2s linear infinite 0.2s;
+}
+
+/* Footer */
+.homepage footer {
+  margin-top: 4rem;
+  font-size: 0.875rem;
+  color: var(--hp-muted);
+  text-align: center;
+}
+
