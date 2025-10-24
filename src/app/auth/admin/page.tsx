@@ -14,7 +14,7 @@ export default function AdminLoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    if (email === 'khushboo@admin.com' && password === 'khushboo') {
+    if (email === 'Aryan@admin.com' && password === 'Aryan@123') {
       setIsTransitioning(true)
       setTimeout(() => {
         window.location.href = '/admin/panel'
