@@ -32,7 +32,7 @@ export default function TeamLeaderboardPage() {
         </header>
 
         <div className="grid grid-cols-1 gap-6">
-          <LeaderboardCard title="Top Teams" items={teams.map((t: any) => ({ name: t.team, house: t.house, score: t.score }))} />
+          <LeaderboardCard title="Top Teams" items={teams.map((t: any) => ({ name: t.name, house: t.house, score: t.score }))} />
         </div>
       </div>
     </div>
