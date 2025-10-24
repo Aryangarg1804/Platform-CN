@@ -40,17 +40,6 @@ export default function ParticipantsPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <header className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Event Rounds</h1>
-        <nav>
-          <ul className="flex gap-6">
-            <li><a href="/" className="hover:underline">Home</a></li>
-            <li><a href="/public/house-leaderboard" className="hover:underline">House Leaderboard</a></li>
-            <li><a href="/public/team-leaderboard" className="hover:underline">Team Leaderboard</a></li>
-          </ul>
-        </nav>
-      </header>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
         {rounds.map((round) => {
           const isUnlocked = unlockedRounds.includes(round.id)
