@@ -21,7 +21,7 @@ export default function HomePage() {
         {/* Portals */}
         <section className="portal-row">
           <PortalDoor title="Admin Entry" subtitle="(Event Leads)" href="/auth/admin" />
-          <PortalDoor title="Round Head" subtitle="(7 Location Heads)" href="/auth/round-head" />
+          <PortalDoor title="Round Head" subtitle="(7 Location Heads)" href="/auth/login" />
           <PortalDoor title="Participants" subtitle="(View Only)" href="/public" />
         </section>
 
