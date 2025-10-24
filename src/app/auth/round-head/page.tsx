@@ -11,7 +11,7 @@ type Credentials = {
 
 // Hardcoded 7 credentials
 const allowedUsers: Credentials[] = [
-  { email: 'khushboo1@gmail.com', password: 'khushboo', round: 1 },
+  { email: 'khushboo1@round-head.com', password: 'khushboo', round: 1 },
   { email: 'khushboo2@gmail.com', password: 'khushboo', round: 2 },
   { email: 'khushboo3@gmail.com', password: 'khushboo', round: 3 },
   { email: 'khushboo4@gmail.com', password: 'khushboo', round: 4 },
