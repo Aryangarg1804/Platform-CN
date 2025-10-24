@@ -1,43 +1,58 @@
-import { NextResponse } from 'next/server'
-import { connectDB } from '@/lib/mongoose'
-import User from '@/models/Users'
-import { signToken } from '@/lib/auth'
+// src/app/api/auth/login/route.ts
 
-// Simple login: { email, password }
-export async function POST(req: Request) {
+import { NextResponse } from 'next/server';
+import { connectDB } from '@/lib/mongoose';
+// Import both the model and the NEW base interface
+import User, { IUserBase } from '@/models/Users';
+import { signToken } from '@/lib/auth';
+
+export async function POST(req: Request): Promise<NextResponse> {
   try {
-    await connectDB()
-    const { email, password } = await req.json()
-    if (!email || !password) return NextResponse.json({ success: false, error: 'Missing credentials' }, { status: 400 })
+    await connectDB();
+    const { email, password } = await req.json();
 
-    const user = await User.findOne({ email }).lean()
-    if (!user) return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 })
-
-    // verify password - if hash present, try bcryptjs, else fallback to plain text compare
-    const hash = (user as any).hash
-    let ok = false
-    if (hash) {
-      try {
-        // dynamic import to avoid adding explicit dep if not installed
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const bcrypt = require('bcryptjs')
-        ok = await bcrypt.compare(password, hash)
-      } catch (e) {
-        console.warn('bcryptjs not available; cannot verify hashed password')
-        ok = false
-      }
-    } else {
-      // fallback insecure compare
-      ok = password === (user as any).plainPassword || false
+    if (!email || !password) {
+      return NextResponse.json({ success: false, error: 'Missing credentials' }, { status: 400 });
     }
 
-    if (!ok) return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 })
+    // Use IUserBase to correctly type the plain object from .lean()
+    const user: IUserBase | null = await User.findOne({ email })
+      .select('+password')
+      .lean<IUserBase>();
 
-    const u: any = user
-    const token = signToken({ id: u._id, email: u.email, role: u.role, roundAssigned: u.roundAssigned })
-    return NextResponse.json({ success: true, token, user: { email: u.email, role: u.role, roundAssigned: u.roundAssigned } })
+    if (!user || !user.password) {
+      return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    // The rest of your code works perfectly!
+    const passwordMatches = password === user.password;
+
+    if (!passwordMatches) {
+      return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    const token = signToken({
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      roundAssigned: user.roundAssigned,
+    });
+    
+    const userForResponse = {
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      roundAssigned: user.roundAssigned,
+    };
+
+    return NextResponse.json({ 
+      success: true, 
+      token, 
+      user: userForResponse 
+    });
+
   } catch (err) {
-    console.error('POST /api/auth/login error', err)
-    return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 })
+    console.error('POST /api/auth/login error', err);
+    return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
   }
 }
