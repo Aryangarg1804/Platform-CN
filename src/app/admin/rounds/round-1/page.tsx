@@ -48,7 +48,7 @@ export default function Round1Page() {
           // We must merge the API data INTO our initialTeams array
           // to ensure the stable `id` (1-24) is always present for
           // React keys and the handleChange function.
-          const filledTeams = initialTeams.map((team, idx) => { 
+          const filledTeams = initialTeams.map((team, idx) => {
             if (teamsData[idx]) {
               // Start with the initial team structure (which has the stable id)
               // and spread the data from the API over it.
@@ -351,7 +351,7 @@ export default function Round1Page() {
           }}>
             ⚡ Round 1 ⚡
           </div>
-          
+
           <h1 style={{
             fontSize: 'clamp(3rem, 6vw, 5rem)',
             fontWeight: 900,
@@ -368,7 +368,7 @@ export default function Round1Page() {
           }}>
             🎩 The Sorting Hat Ceremony
           </h1>
-          
+
           <div style={{
             fontSize: 'clamp(1.2rem, 2.5vw, 1.8rem)',
             color: '#d4af37',
@@ -379,7 +379,7 @@ export default function Round1Page() {
           }}>
             Platform 9¾ • Hogwarts Express
           </div>
-          
+
           <div style={{
             width: '250px',
             height: '3px',
@@ -492,7 +492,7 @@ export default function Round1Page() {
               }}>
                 📜 Hogwarts Registry of Teams
               </h2>
-              
+
               <div style={{ overflowX: 'auto' }}>
                 <table style={{
                   width: '100%',
@@ -634,83 +634,54 @@ export default function Round1Page() {
                     ))}
                   </tbody>
                 </table>
+                <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        setSubmissionStatus('submitting')
+                        const res = await fetch('/api/admin/teams', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ teams }),
+                        })
+                        if (!res.ok) throw new Error('Failed to update teams')
+                        setSubmissionStatus('success')
+                        setTimeout(() => setSubmissionStatus('idle'), 2000)
+                      } catch (err) {
+                        console.error(err)
+                        setSubmissionStatus('error')
+                        setTimeout(() => setSubmissionStatus('idle'), 2000)
+                      }
+                    }}
+                    disabled={submissionStatus === 'submitting'}
+                    style={{
+                      padding: '1rem 2.5rem',
+                      background: 'linear-gradient(135deg, #8b0000, #c41e3a)',
+                      border: '3px solid #ffd700',
+                      borderRadius: '12px',
+                      color: '#ffd700',
+                      fontWeight: 700,
+                      fontSize: '1.1rem',
+                      letterSpacing: '0.1em',
+                      cursor: submissionStatus === 'submitting' ? 'not-allowed' : 'pointer',
+                      opacity: submissionStatus === 'submitting' ? 0.6 : 1,
+                      transition: 'all 0.3s ease',
+                      fontFamily: '"Cinzel", serif',
+                    }}
+                  >
+                    {submissionStatus === 'submitting'
+                      ? '🕓 Updating...'
+                      : submissionStatus === 'success'
+                        ? '✅ Updated!'
+                        : submissionStatus === 'error'
+                          ? '❌ Error! Try Again'
+                          : '💾 Update Table'}
+                  </button>
+                </div>
+
               </div>
             </div>
-
-            {/* Save Button */}
-            <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-              <button
-                onClick={saveTeams}
-                style={{
-                  padding: '1.2rem 4rem',
-                  background: 'linear-gradient(135deg, #8b0000, #c41e3a)',
-                  border: '4px solid #ffd700',
-                  borderRadius: '15px',
-                  color: '#ffd700',
-                  fontSize: '1.3rem',
-                  fontWeight: 800,
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
-                  boxShadow: '0 10px 35px rgba(139, 0, 0, 0.7), 0 0 30px rgba(255, 215, 0, 0.4)',
-                  transition: 'all 0.4s ease',
-                  fontFamily: '"Cinzel", serif',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-5px) scale(1.08)'
-                  e.currentTarget.style.boxShadow = '0 15px 50px rgba(139, 0, 0, 0.9), 0 0 50px rgba(255, 215, 0, 0.6)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0) scale(1)'
-                  e.currentTarget.style.boxShadow = '0 10px 35px rgba(139, 0, 0, 0.7), 0 0 30px rgba(255, 215, 0, 0.4)'
-                }}
-              >
-                💾 Save All Teams to Registry
-              </button>
-            </div>
-
-            {/* Submit Results Button + confirmation */}
-            <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-              <button
-                onClick={() => setShowConfirm(true)}
-                style={{
-                  padding: '1rem 3rem',
-                  background: 'linear-gradient(135deg, #1a5d1a, #2d8b2d)',
-                  border: '4px solid #ffd700',
-                  borderRadius: '12px',
-                  color: '#ffd700',
-                  fontSize: '1.1rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  marginRight: '1rem',
-                }}
-              >
-                🚀 Submit Results
-              </button>
-
-              {showConfirm && (
-                <div style={{ display: 'inline-block', padding: '0.6rem 1rem', background: '#111', border: '2px solid #444', borderRadius: '10px' }}>
-                  <span style={{ color: '#ffd700', marginRight: '0.6rem' }}>Confirm submit?</span>
-                  <button onClick={async () => {
-                    setSubmissionStatus('submitting')
-                    try {
-                      await submitRoundResults()
-                      setSubmissionStatus('success')
-                      setShowConfirm(false)
-                    } catch (e) {
-                      console.error(e)
-                      setSubmissionStatus('error')
-                    }
-                    setTimeout(() => setSubmissionStatus('idle'), 3000)
-                  }} style={{ marginRight: '0.5rem' }}>Yes</button>
-                  <button onClick={() => setShowConfirm(false)}>No</button>
-                </div>
-              )}
-
-              {submissionStatus === 'success' && <div style={{ color: '#7cff7c', marginTop: '0.5rem' }}>Results submitted ✓</div>}
-              {submissionStatus === 'error' && <div style={{ color: '#ff7c7c', marginTop: '0.5rem' }}>Submission failed</div>}
-            </div>
-
+            
             {/* Leaderboards */}
             <div style={{
               display: 'grid',
@@ -799,7 +770,7 @@ export default function Round1Page() {
                   // Replaced alert with a less intrusive confirmation
                   console.log('Quaffle awarded to ' + house)
                   const awardButton = document.querySelector('#adminAwardHouse + button') as HTMLButtonElement
-                  if(awardButton) {
+                  if (awardButton) {
                     const originalText = awardButton.innerText
                     awardButton.innerText = 'Awarded! ✓'
                     awardButton.disabled = true
