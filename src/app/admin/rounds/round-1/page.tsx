@@ -117,7 +117,7 @@ export default function Round1Page() {
       return
     }
     try {
-      const res = await fetch('/api/teams', {
+      const res = await fetch('/api/admin/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(teams), // send array of teams
