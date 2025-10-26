@@ -276,7 +276,7 @@ export async function GET(req: NextRequest) {
     // Filter by house if specified
     if (house) {
       query.house = house
-    }
+    } 
 
     // Always show active teams first
     const teams = await Team.find(query)
@@ -284,7 +284,7 @@ export async function GET(req: NextRequest) {
       .exec()
 
     // Return in the { teams: [...] } structure consistent with POST response
-    return NextResponse.json({ teams: teams })
+    return NextResponse.json( teams )
   } catch (err) {
     console.error("GET /api/admin/teams error:", err) // More specific logging
     return NextResponse.json({ error: 'Failed to fetch teams' }, { status: 500 })
