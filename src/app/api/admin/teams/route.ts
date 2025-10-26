@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { connectDB } from '@/lib/mongoose'
-import Team from '@/models/Team'
-import { Types } from 'mongoose'
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongoose";
+import Team from "@/models/Team";
+import { Types } from "mongoose";
 
+// -------------------- POST --------------------
 // -------------------- POST --------------------
 export async function POST(req: NextRequest) {
   try {
@@ -14,19 +15,29 @@ export async function POST(req: NextRequest) {
     console.log("🟡 Incoming teams:", teamsArray);
 
     if (!Array.isArray(teamsArray)) {
-      return NextResponse.json({ error: "Expected array of teams" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Expected array of teams" },
+        { status: 400 }
+      );
     }
 
     for (const team of teamsArray) {
+      const existingTeam = await Team.findOne({ name: team.name });
+
+      const currentPoints = existingTeam?.totalPoints || 0;
+      const addedScore = team.score ?? 0;
+
       await Team.findOneAndUpdate(
-        { name: team.name }, // simpler and safe filter
+        { name: team.name },
         {
           $set: {
             name: team.name,
             house: team.house,
             roundsParticipating: team.roundsParticipating || [1, 2, 3, 4],
             isActive: team.isActive !== false,
-            totalPoints: team.score ?? team.totalPoints ?? 0,
+          },
+          $inc: {
+            totalPoints: team.score ?? 0, // ✅ Add score to total points
           },
         },
         { upsert: true, new: true }
@@ -44,49 +55,58 @@ export async function POST(req: NextRequest) {
 // -------------------- GET --------------------
 export async function GET(req: NextRequest) {
   try {
-    await connectDB()
-    const searchParams = new URL(req.url).searchParams
-    const round = searchParams.get('round')
-    const house = searchParams.get('house')
+    await connectDB();
+    const searchParams = new URL(req.url).searchParams;
+    const round = searchParams.get("round");
+    const house = searchParams.get("house");
 
-    let query: any = {}
-    if (round) query.roundsParticipating = Number(round)
-    if (house) query.house = house
+    let query: any = {};
+    if (round) query.roundsParticipating = Number(round);
+    if (house) query.house = house;
 
     const teams = await Team.find(query)
       .sort({ isActive: -1, house: 1, name: 1 })
-      .exec()
+      .exec();
 
-    return NextResponse.json(teams)
+    return NextResponse.json(teams);
   } catch (err) {
-    console.error('GET /api/admin/teams error:', err)
-    return NextResponse.json({ error: 'Failed to fetch teams' }, { status: 500 })
+    console.error("GET /api/admin/teams error:", err);
+    return NextResponse.json(
+      { error: "Failed to fetch teams" },
+      { status: 500 }
+    );
   }
 }
 
 // -------------------- DELETE --------------------
 export async function DELETE(req: NextRequest) {
   try {
-    await connectDB()
+    await connectDB();
 
-    const data = await req.json()
-    const { teamId } = data
+    const data = await req.json();
+    const { teamId } = data;
 
     if (!teamId) {
-      return NextResponse.json({ error: 'Missing teamId' }, { status: 400 })
+      return NextResponse.json({ error: "Missing teamId" }, { status: 400 });
     }
 
-    const result = await Team.findByIdAndUpdate(teamId, { isActive: false })
+    const result = await Team.findByIdAndUpdate(teamId, { isActive: false });
     if (!result) {
-      return NextResponse.json({ error: 'Team not found' }, { status: 404 })
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('DELETE /api/admin/teams error:', err)
-    if ((err as Error).name === 'CastError') {
-      return NextResponse.json({ error: 'Invalid teamId format' }, { status: 400 })
+    console.error("DELETE /api/admin/teams error:", err);
+    if ((err as Error).name === "CastError") {
+      return NextResponse.json(
+        { error: "Invalid teamId format" },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ error: 'Failed to delete team' }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to delete team" },
+      { status: 500 }
+    );
   }
 }
