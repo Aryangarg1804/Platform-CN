@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongoose'
-import Team from '@/models/Team'
+import Team from '@/models/Teams'
 import { verifyToken } from '@/lib/auth'
 
 // GET all teams

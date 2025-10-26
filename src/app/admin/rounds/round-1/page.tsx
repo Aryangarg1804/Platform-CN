@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -32,7 +33,7 @@ export default function Round1Page() {
     setIsMounted(true)
   }, [])
 
-   // Fetch initial data and poll round lock status
+  // Fetch initial data and poll round lock status
   useEffect(() => {
     async function fetchData() {
       try {
@@ -43,7 +44,24 @@ export default function Round1Page() {
         const teamsRes = await fetch('/api/admin/teams')
         const teamsData = await teamsRes.json()
         if (teamsData && teamsData.length) {
-          const filledTeams = initialTeams.map((team, idx) => teamsData[idx] || team)
+          // --- FIX IS HERE ---
+          // We must merge the API data INTO our initialTeams array
+          // to ensure the stable `id` (1-24) is always present for
+          // React keys and the handleChange function.
+          const filledTeams = initialTeams.map((team, idx) => { 
+            if (teamsData[idx]) {
+              // Start with the initial team structure (which has the stable id)
+              // and spread the data from the API over it.
+              // Finally, explicitly re-set the id to be safe.
+              return {
+                ...team, // Has { id: 1, name: '', ... }
+                ...teamsData[idx], // Has { _id: 'abc', name: 'Team 1', ... }
+                id: team.id, // Ensures final object has { id: 1, _id: 'abc', ... }
+              };
+            }
+            // No API data for this index, use the default initial team
+            return team;
+          });
           setTeams(filledTeams)
         }
       } catch (err) {
@@ -66,7 +84,7 @@ export default function Round1Page() {
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, []) // Empty dependency array is correct, runs once on mount
 
   const handleChange = (
     id: number,
@@ -80,18 +98,18 @@ export default function Round1Page() {
   }
 
   const toggleLock = async () => {
-  try {
-    const res = await fetch('/api/admin/round-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isLocked: !roundLocked }),
-    })
-    const data = await res.json()
-    setRoundLocked(data.isLocked)
-  } catch (err) {
-    console.error('Error toggling lock:', err)
+    try {
+      const res = await fetch('/api/admin/round-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isLocked: !roundLocked }),
+      })
+      const data = await res.json()
+      setRoundLocked(data.isLocked)
+    } catch (err) {
+      console.error('Error toggling lock:', err)
+    }
   }
-}
 
   const saveTeams = async () => {
     if (roundLocked) {
@@ -157,7 +175,7 @@ export default function Round1Page() {
     setTeams(prev => [...prev, { id: newId, name, house, score: 0 }])
   }
   const [showConfirm, setShowConfirm] = useState(false)
-  const [submissionStatus, setSubmissionStatus] = useState<'idle'|'submitting'|'success'|'error'>('idle')
+  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
 
   // House-wise leaderboard
   const houseScores = houses.map(house => ({
@@ -302,6 +320,11 @@ export default function Round1Page() {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.05); }
         }
+        /* Style for the table row hover */
+        tbody tr:hover {
+          background-color: rgba(80, 40, 20, 0.6) !important;
+          box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+        }
       `}</style>
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: '1600px', margin: '0 auto' }}>
@@ -432,9 +455,9 @@ export default function Round1Page() {
             }}>
               The Sorting Ceremony Awaits
             </p>
-            <p style={{ 
-              fontSize: '1.1rem', 
-              color: '#ffaa00', 
+            <p style={{
+              fontSize: '1.1rem',
+              color: '#ffaa00',
               fontStyle: 'italic',
               fontFamily: '"Palatino Linotype", serif',
             }}>
@@ -482,34 +505,34 @@ export default function Round1Page() {
                       background: 'linear-gradient(135deg, #8b0000, #c41e3a)',
                       color: '#ffd700',
                     }}>
-                      <th style={{ 
-                        padding: '1.2rem', 
-                        border: '2px solid #8b4513', 
-                        fontWeight: 800, 
+                      <th style={{
+                        padding: '1.2rem',
+                        border: '2px solid #8b4513',
+                        fontWeight: 800,
                         letterSpacing: '0.1em',
                         fontFamily: '"Cinzel", serif',
                         fontSize: '1.1rem',
                       }}>#</th>
-                      <th style={{ 
-                        padding: '1.2rem', 
-                        border: '2px solid #8b4513', 
-                        fontWeight: 800, 
+                      <th style={{
+                        padding: '1.2rem',
+                        border: '2px solid #8b4513',
+                        fontWeight: 800,
                         letterSpacing: '0.1em',
                         fontFamily: '"Cinzel", serif',
                         fontSize: '1.1rem',
                       }}>Team Name</th>
-                      <th style={{ 
-                        padding: '1.2rem', 
-                        border: '2px solid #8b4513', 
-                        fontWeight: 800, 
+                      <th style={{
+                        padding: '1.2rem',
+                        border: '2px solid #8b4513',
+                        fontWeight: 800,
                         letterSpacing: '0.1em',
                         fontFamily: '"Cinzel", serif',
                         fontSize: '1.1rem',
                       }}>House</th>
-                      <th style={{ 
-                        padding: '1.2rem', 
-                        border: '2px solid #8b4513', 
-                        fontWeight: 800, 
+                      <th style={{
+                        padding: '1.2rem',
+                        border: '2px solid #8b4513',
+                        fontWeight: 800,
                         letterSpacing: '0.1em',
                         fontFamily: '"Cinzel", serif',
                         fontSize: '1.1rem',
@@ -518,7 +541,7 @@ export default function Round1Page() {
                   </thead>
                   <tbody>
                     {teams.map((team, index) => (
-                      <tr key={team.id} style={{
+                      <tr key={team.id} style={{ // key={team.id} is now stable
                         background: 'rgba(20, 10, 5, 0.4)',
                         transition: 'all 0.3s ease',
                       }}>
@@ -719,19 +742,19 @@ export default function Round1Page() {
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={houseScores}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#8b4513" strokeOpacity={0.5} />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="#d4af37" 
-                      style={{ 
-                        fontSize: '0.95rem', 
+                    <XAxis
+                      dataKey="name"
+                      stroke="#d4af37"
+                      style={{
+                        fontSize: '0.95rem',
                         fontFamily: '"Palatino Linotype", serif',
                         fontWeight: 600,
-                      }} 
+                      }}
                     />
-                    <YAxis 
+                    <YAxis
                       stroke="#d4af37"
-                      style={{ 
-                        fontSize: '0.9rem', 
+                      style={{
+                        fontSize: '0.9rem',
                         fontFamily: '"Cinzel", serif',
                       }}
                     />
@@ -746,12 +769,12 @@ export default function Round1Page() {
                         fontWeight: 600,
                       }}
                     />
-                    <Legend 
-                      wrapperStyle={{ 
+                    <Legend
+                      wrapperStyle={{
                         color: '#ffd700',
                         fontFamily: '"Cinzel", serif',
                         fontSize: '0.95rem',
-                      }} 
+                      }}
                     />
                     <Bar dataKey="total" fill="#ffd700" radius={[8, 8, 0, 0]} />
                   </BarChart>
@@ -761,7 +784,7 @@ export default function Round1Page() {
               {/* Award Quaffle control (admin only) */}
               <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                 <label style={{ color: '#ffd700', marginRight: '0.6rem' }}>Award Quaffle to:</label>
-                <select id="adminAwardHouse" style={{ padding: '0.6rem', borderRadius: '6px', marginRight: '0.6rem' }}>
+                <select id="adminAwardHouse" style={{ padding: '0.6rem', borderRadius: '6px', marginRight: '0.6rem', color: 'black' }}>
                   {houses.map(h => <option key={h} value={h}>{h}</option>)}
                 </select>
                 <button onClick={async () => {
@@ -773,7 +796,18 @@ export default function Round1Page() {
                     headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
                     body: JSON.stringify({ house, round: 'round-1' })
                   })
-                  alert('Quaffle awarded to ' + house)
+                  // Replaced alert with a less intrusive confirmation
+                  console.log('Quaffle awarded to ' + house)
+                  const awardButton = document.querySelector('#adminAwardHouse + button') as HTMLButtonElement
+                  if(awardButton) {
+                    const originalText = awardButton.innerText
+                    awardButton.innerText = 'Awarded! ✓'
+                    awardButton.disabled = true
+                    setTimeout(() => {
+                      awardButton.innerText = originalText
+                      awardButton.disabled = false
+                    }, 2000)
+                  }
                 }} style={{ padding: '0.8rem 1.2rem', borderRadius: '8px', background: '#ffd700' }}>Award</button>
               </div>
 
@@ -808,16 +842,16 @@ export default function Round1Page() {
                       textAnchor="end"
                       height={100}
                       stroke="#d4af37"
-                      style={{ 
-                        fontSize: '0.8rem', 
+                      style={{
+                        fontSize: '0.8rem',
                         fontFamily: '"Palatino Linotype", serif',
                         fontWeight: 600,
                       }}
                     />
-                    <YAxis 
+                    <YAxis
                       stroke="#d4af37"
-                      style={{ 
-                        fontSize: '0.9rem', 
+                      style={{
+                        fontSize: '0.9rem',
                         fontFamily: '"Cinzel", serif',
                       }}
                     />

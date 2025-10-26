@@ -3,7 +3,7 @@
 @tailwind utilities;
 /* Import magical serif font */
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap');
-
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&family=Cinzel+Decorative:wght@400;700;900&display=swap');
 :root {
   --hp-bg: #0b0f13;
   --hp-card: #0f1720;
@@ -217,4 +217,3 @@ body {
   color: var(--hp-muted);
   text-align: center;
 }
-
