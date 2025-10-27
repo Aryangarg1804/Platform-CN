@@ -13,108 +13,186 @@ import {
 } from 'recharts'
 import { canAccessRound } from '@/lib/roundHeadAuth'
 
-interface ScoringLabels {
-  accuracy: string;
-  time: string;
-}
-
-interface RoundConfig {
-  title: string;
-  maxTeams: number;
-  houses: string[];
-  scoringFields: Array<keyof ScoringLabels>;
-  scoringLabels: ScoringLabels;
-}
-
-const roundConfig: RoundConfig = {
-  title: 'Potions Championship',
-  maxTeams: 24,
-  houses: ['Gryffindor', 'Hufflepuff', 'Ravenclaw'],
-  scoringFields: ['accuracy', 'time'],
-  scoringLabels: {
-    accuracy: 'Accuracy',
-    time: 'Time (minutes)',
-  },
+// Define Team interface for type safety with new fields for score management
+interface Team {
+    _id?: string; // Optional DB ID
+    id: number;
+    name: string;
+    house: string;
+    totalScore: number; // Current total points (read-only in UI)
+    pointsToAdd: number; // Points for current round (editable input)
 }
 
 export default function Round3() {
   const [user, setUser] = useState<any>(null)
-  const [teams, setTeams] = useState<any[]>([])
   const [roundLocked, setRoundLocked] = useState(true)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState({ text: '', type: 'info' })
+  // Houses for Round 3 as specified in the original file: Gryffindor, Hufflepuff, Ravenclaw
+  const houses = ['Gryffindor', 'Hufflepuff', 'Ravenclaw'] 
 
   // Auth check on mount
   useEffect(() => {
-    const token = localStorage.getItem('token')
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
     if (!token) {
       window.location.href = '/auth/login'
       return
     }
     try {
+      // Decode the payload part of the JWT
       const payload = JSON.parse(atob(token.split('.')[1]))
-      if (!canAccessRound(payload, 3)) {
+      if (!canAccessRound(payload, 3)) { // Check for Round 3 access
         window.location.href = '/auth/login'
         return
       }
       setUser(payload)
     } catch (e) {
+      console.error('Authentication error:', e)
       window.location.href = '/auth/login'
     }
   }, [])
 
-  // Fetch teams and round status
-  useEffect(() => {
+  // Initial blank 24 teams structure
+  const initialTeams: Team[] = Array.from({ length: 24 }, (_, i) => ({
+    id: i + 1,
+    name: '',
+    house: '',
+    totalScore: 0,
+    pointsToAdd: 0,
+  }))
+
+  const [teams, setTeams] = useState<Team[]>(initialTeams)
+  const [saving, setSaving] = useState(false)
+
+  // Fetch teams and round status from DB on mount and on poll
+  const fetchData = async () => {
     if (!user) return
 
-    async function fetchData() {
-      try {
-        // Get round lock status
-        const statusRes = await fetch('/api/admin/round-status?round=round-3')
-        const statusData = await statusRes.json()
-        setRoundLocked(statusData.isLocked)
+    try {
+      // Get round lock status
+      const statusRes = await fetch('/api/admin/round-status?round=round-3')
+      const statusData = await statusRes.json()
+      setRoundLocked(statusData.isLocked) 
 
-        // Get round data
-        const roundRes = await fetch('/api/rounds/round-3')
-        const roundData = await roundRes.json()
-        if (roundData.round?.results) {
-          setTeams(roundData.round.results.map((r: any) => ({
-            id: r.team._id,
-            name: r.team.name,
-            house: r.team.house,
-            accuracy: r.points,
-            time: r.time,
-            rank: r.rank,
-          })))
-        }
-      } catch (err) {
-        console.error(err)
-        setMessage({ text: 'Failed to load data', type: 'error' })
-      } finally {
-        setLoading(false)
+      // Get teams
+      const teamsRes = await fetch('/api/teams')
+      const teamsData = await teamsRes.json()
+      
+      // Map current teams input state to preserve any pointsToAdd that haven't been saved
+      const currentPointsToAddMap = new Map(teams.map(t => [t.id, t.pointsToAdd]));
+
+      if (teamsData && teamsData.teams && teamsData.teams.length) {
+        
+        // Use all teams from DB, map them to the new structure
+        let nextId = 1; // Use a counter for the stable local ID
+        const filledTeams = teamsData.teams
+            .filter((t: any) => t.isActive !== false) // Only show active teams
+            .map((dbTeam: any) => {
+                const localId = nextId++;
+                return {
+                    id: localId,
+                    _id: dbTeam._id,
+                    name: dbTeam.name,
+                    house: dbTeam.house,
+                    totalScore: dbTeam.totalPoints || 0,
+                    // Keep old pointsToAdd value if available, otherwise reset to 0
+                    pointsToAdd: currentPointsToAddMap.get(localId) || 0,
+                };
+            });
+
+        setTeams(filledTeams);
       }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  // Effect for fetching data
+  useEffect(() => {
+    fetchData()
+    // Polling interval to keep status and scores updated
+    const interval = setInterval(fetchData, 10000) 
+    return () => clearInterval(interval)
+  }, [user]) // Re-run effect when user object changes
+
+  // Handle changes for points to add
+  const handleChange = (id: number, value: number) => {
+    setTeams(prev =>
+      prev.map(team => (team.id === id ? { ...team, pointsToAdd: value } : team))
+    )
+  }
+
+  // House-wise leaderboard uses the totalScore
+  const houseScores = houses.map(house => ({
+    name: house,
+    total: teams
+      .filter(t => t.house === house && t.name.trim() !== '')
+      .reduce((sum, t) => sum + Number(t.totalScore || 0), 0),
+  }))
+
+  // Team-wise leaderboard uses the totalScore
+  const teamScores = teams
+    .filter(t => t.name.trim() !== '')
+    .map(t => ({
+      name: t.name,
+      score: Number(t.totalScore || 0),
+      house: t.house,
+    }))
+    .sort((a, b) => b.score - a.score)
+
+  // Save functionality now handles score addition
+  const saveTeams = async () => {
+    if (roundLocked) {
+        alert('Round is currently locked by the admin. Cannot save.')
+        return
     }
 
-    fetchData()
-    const interval = setInterval(fetchData, 10000) // poll every 10s
-    return () => clearInterval(interval)
-  }, [user])
-
-  // Save team scores
-  const saveScores = async () => {
-    if (roundLocked) return
     setSaving(true)
     try {
       const token = localStorage.getItem('token')
-      const results = teams.map((team, idx) => ({
-        team: team.id,
-        points: Number(team.accuracy) || 0,
-        time: Number(team.time) || 0,
-        rank: idx + 1,
-      }))
+      
+      // 1. Prepare data for POST /api/admin/teams (Performs $inc/addition)
+      const teamsToUpdate = teams
+        .filter(t => t.pointsToAdd > 0 && t._id) // Only send if points added and team has a DB ID
+        .map(team => ({
+          _id: team._id,
+          name: team.name, 
+          house: team.house,
+          score: team.pointsToAdd // Mapped to $inc totalPoints on backend 
+        }));
 
-      await fetch('/api/rounds/round-3', {
+      if (teamsToUpdate.length === 0) {
+        alert('No new points to add. Ensure you have entered scores > 0.')
+        setSaving(false);
+        return;
+      }
+        
+      const teamSaveRes = await fetch('/api/admin/teams', { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(teamsToUpdate),
+      })
+      
+      const teamSaveData = await teamSaveRes.json()
+
+      if (!teamSaveRes.ok) {
+          throw new Error(teamSaveData.error || 'Failed to save teams data.')
+      }
+
+      // 2. Refresh data immediately to show updated total scores and reset input fields
+      await fetchData();
+
+      // 3. Save round results (logs the state of this round to the Round model)
+      // Use the newly fetched data (stored in `teams` after fetchData) to submit round results
+      const results = teams.filter(t => t.name.trim() !== '').map((team, idx) => ({
+          team: team._id,
+          points: team.totalScore, // Send the current total score
+          rank: idx + 1,
+          time: 0,
+      }));
+
+      await fetch('/api/rounds/round-3', { // Submitting to round-3 endpoint
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -123,188 +201,205 @@ export default function Round3() {
         body: JSON.stringify({ results, approved: true }),
       })
 
-      setMessage({ text: 'Scores saved successfully', type: 'success' })
-    } catch (err) {
+      alert('Points added and scores updated successfully!')
+    } catch (err: any) {
       console.error(err)
-      setMessage({ text: 'Failed to save scores', type: 'error' })
+      alert('Error saving scores: ' + err.message)
     } finally {
       setSaving(false)
-      setTimeout(() => setMessage({ text: '', type: 'info' }), 3000)
     }
   }
 
-  // helper to award quaffle
-  const awardHouse = async (house:string, roundId='round-3') => {
-    try{
-      const token = localStorage.getItem('token')
-      const res = await fetch('/api/admin/award-quaffle', {method:'POST', headers:{'Content-Type':'application/json','Authorization': token? `Bearer ${token}` : ''}, body: JSON.stringify({house, round: roundId})})
-      if(!res.ok) throw new Error('Failed')
-      alert('Quaffle awarded to '+house)
-    }catch(e){console.error(e); alert('Failed to award')}
+  // Helper to award quaffle
+  const awardQuaffle = async (house: string) => {
+    if (roundLocked) {
+        alert('Round is currently locked by the admin. Cannot award quaffle.')
+        return
+    }
+    const token = localStorage.getItem('token')
+    try { 
+        const res = await fetch('/api/admin/award-quaffle', {
+            method: 'POST', 
+            headers: {
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${token}`
+            }, 
+            body: JSON.stringify({house: house, round: 'round-3'}) // Round 3 quaffle
+        }); 
+        if (!res.ok) throw new Error('Failed to award quaffle.');
+        alert('Quaffle awarded to ' + house);
+    } catch(e) {
+        console.error(e); 
+        alert('Failed to award quaffle');
+    }
   }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-400 text-2xl font-['Cinzel']">
-      Loading...
-    </div>
-  )
-
-  // Calculate house-wise totals
-  const houseScores = roundConfig.houses.map(house => ({
-    name: house,
-    total: teams
-      .filter(t => t.house === house && t.name)
-      .reduce((sum, t) => sum + Number(t.accuracy || 0), 0),
-  }))
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4 text-amber-400 font-['Cinzel']">
-            Round 3: {roundConfig.title}
-          </h1>
-          <div className={`inline-block px-4 py-2 rounded ${
-            roundLocked ? 'bg-red-900' : 'bg-green-900'
-          }`}>
-            {roundLocked ? '🔒 Round Locked' : '🔓 Round Unlocked'}
-          </div>
-        </header>
+    <div className="min-h-screen flex flex-col items-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-white p-6">
+      <header className="text-center mb-8">
+        <h1 className="text-4xl font-bold mb-4 text-amber-400">Round 3 Dashboard (Round Head)</h1>
+        <p className="text-2xl mb-6">Escape Loop</p>
+        {/* Read-Only Lock Status Display */}
+        <div className={`inline-block px-4 py-2 rounded font-semibold ${
+          roundLocked ? 'bg-red-900 border-red-500 border-2 text-white' : 'bg-green-900 border-green-500 border-2 text-white'
+        }`}>
+          {roundLocked ? '🔒 Round Locked - Read Only' : '🔓 Round Unlocked - Ready for Scoring'}
+        </div>
+      </header>
 
-        {message.text && (
-          <div className={`p-4 mb-6 rounded text-center ${
-            message.type === 'error' ? 'bg-red-900' : 'bg-green-900'
-          }`}>
-            {message.text}
-          </div>
-        )}
+      {/* Warning/Info message */}
+      {roundLocked && (
+         <div className="p-4 mb-6 rounded text-center bg-red-900/50 border border-red-700 text-red-300">
+             The round is currently locked by the Admin. You cannot edit data or award Quaffles.
+         </div>
+      )}
 
-        {/* Scoring Table */}
-        <div className="bg-gray-800 rounded-2xl p-6 mb-8 shadow-lg border-2 border-amber-900/30">
-          <h2 className="text-2xl font-['Cinzel'] text-amber-400 mb-4">Team Scores</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b-2 border-amber-900/30">
-                  <th className="p-2">Rank</th>
-                  <th className="p-2">Team</th>
-                  <th className="p-2">House</th>
-                  {roundConfig.scoringFields.map(field => (
-                    <th key={field} className="p-2">{roundConfig.scoringLabels[field]}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {teams.map((team, idx) => (
-                  <tr key={team.id} className="border-b border-amber-900/30 hover:bg-gray-700/50">
-                    <td className="p-2 text-center">{idx + 1}</td>
-                    <td className="p-2">{team.name}</td>
-                    <td className="p-2">{team.house}</td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        className="w-24 bg-gray-700 border border-amber-900/50 rounded p-1 text-amber-100"
-                        value={team.accuracy || 0}
-                        onChange={e => {
-                          const newTeams = [...teams]
-                          newTeams[idx].accuracy = Number(e.target.value)
-                          setTeams(newTeams)
-                        }}
-                        disabled={roundLocked}
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        className="w-24 bg-gray-700 border border-amber-900/50 rounded p-1 text-amber-100"
-                        value={team.time || 0}
-                        onChange={e => {
-                          const newTeams = [...teams]
-                          newTeams[idx].time = Number(e.target.value)
-                          setTeams(newTeams)
-                        }}
-                        disabled={roundLocked}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {/* Team Scoring Table */}
+      <div className="bg-gray-800 text-amber-100 rounded-2xl p-4 shadow-lg w-full max-w-5xl mb-6 overflow-x-auto border-2 border-amber-900/30">
+        <table className="min-w-full text-sm text-center border-collapse">
+          <thead className="bg-gray-900/50 text-amber-400">
+            <tr>
+              <th className="p-2 border border-amber-900/30">#</th>
+              <th className="p-2 border border-amber-900/30">Team Name</th>
+              <th className="p-2 border border-amber-900/30">House</th>
+              <th className="p-2 border border-amber-900/30">Current Total Score</th>
+              <th className="p-2 border border-amber-900/30">Points to Add (Round 3)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map(team => (
+              <tr key={team.id} className="border-t border-amber-900/30 hover:bg-gray-700/50">
+                <td className="p-2 border border-amber-900/30">{team.id}</td>
+                <td className="p-2 border border-amber-900/30">
+                  {/* Team Name: Always disabled */}
+                  <input
+                    type="text"
+                    className="w-40 bg-gray-700 border border-amber-900/50 rounded p-1 text-amber-100 text-center"
+                    value={team.name}
+                    disabled={true} 
+                  />
+                </td>
+                <td className="p-2 border border-amber-900/30">
+                  {/* House: Always disabled */}
+                  <select
+                    className="bg-gray-700 border border-amber-900/50 rounded p-1 text-amber-100"
+                    value={team.house}
+                    disabled={true} 
+                  >
+                    <option value="">Select</option>
+                    {houses.map(h => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-2 border border-amber-900/30 text-amber-300 font-semibold">
+                  {/* Current Total Score: Read-only display */}
+                  {team.totalScore}
+                </td>
+                <td className="p-2 border border-amber-900/30">
+                  {/* Points to Add: Editable when unlocked */}
+                  <input
+                    type="number"
+                    className="w-24 bg-gray-700 border border-amber-900/50 rounded p-1 text-amber-100 text-right"
+                    value={team.pointsToAdd}
+                    onChange={e =>
+                      handleChange(team.id, Number(e.target.value) < 0 ? 0 : Number(e.target.value))
+                    }
+                    disabled={roundLocked} // Disabled when locked
+                    placeholder="0"
+                    min="0"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Save Button */}
+      {!roundLocked && (
+        <button
+          onClick={saveTeams}
+          disabled={saving || roundLocked}
+          className="bg-gradient-to-r from-amber-700 to-amber-900 text-amber-100 font-bold py-2 px-6 rounded-lg mb-8 border-2 border-amber-400/30 hover:from-amber-800 hover:to-amber-950 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving...' : '💾 Save Added Points'}
+        </button>
+      )}
+
+      {/* Award Quaffle (for authorized Round Head) */}
+      <div className="mb-8 p-4 bg-gray-800/50 rounded-lg border border-amber-900/30">
+        <p className="mb-3 text-amber-200 font-semibold">Award a house quaffle (Round 3 Winner):</p>
+        <div className="flex gap-4 items-center justify-center">
+          {houses.map(h => (
+            <button 
+              key={h} 
+              onClick={() => awardQuaffle(h)} 
+              disabled={roundLocked} // Disabled when locked
+              className="px-4 py-2 bg-amber-700 rounded text-white font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Give {h} Quaffle
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Leaderboards */}
+      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-10">
+        {/* House-wise Leaderboard */}
+        <div className="bg-gray-800 text-amber-100 rounded-2xl p-4 shadow-lg border-2 border-amber-900/30">
+          <h2 className="text-xl font-semibold mb-4 text-center text-amber-400 font-serif">
+            🏆 House-wise Leaderboard
+          </h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={houseScores}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#78350f" strokeOpacity={0.3} />
+              <XAxis dataKey="name" stroke="#fcd34d" />
+              <YAxis stroke="#fcd34d" />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1f2937',
+                  border: '1px solid #78350f',
+                  borderRadius: '4px',
+                  color: '#fcd34d'
+                }}
+              />
+              <Legend />
+              <Bar dataKey="total" fill="#b45309" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
 
-        {!roundLocked && (
-          <div className="text-center mb-8">
-            <button
-              onClick={saveScores}
-              disabled={saving || roundLocked}
-              className="bg-gradient-to-r from-amber-700 to-amber-900 text-amber-100 font-bold py-3 px-8 rounded-lg border-2 border-amber-400/30 hover:from-amber-800 hover:to-amber-950 transition-all shadow-lg disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Scores'}
-            </button>
-          </div>
-        )}
-
-        {!roundLocked && user && (user.role === 'admin' || user.role === 'round-head') && (
-          <div className="mb-6 text-center">
-            <p className="mb-2 text-amber-200">Award house quaffle:</p>
-            <div className="flex justify-center gap-2">
-              {['Gryffindor','Hufflepuff','Ravenclaw'].map(h=> <button key={h} onClick={()=>awardHouse(h)} className="px-3 py-1 bg-amber-600 rounded">Give {h}</button>)}
-            </div>
-          </div>
-        )}
-
-        {/* Visualizations */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* House-wise scores */}
-          <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
-            <h2 className="text-xl font-['Cinzel'] text-amber-400 mb-4 text-center">
-              House Rankings
-            </h2>
-            <div className="h-[300px]">
-              <ResponsiveContainer>
-                <BarChart data={houseScores}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#78350f" strokeOpacity={0.3} />
-                  <XAxis dataKey="name" stroke="#fcd34d" />
-                  <YAxis stroke="#fcd34d" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1f2937',
-                      border: '1px solid #78350f',
-                      borderRadius: '4px',
-                      color: '#fcd34d'
-                    }}
-                  />
-                  <Bar dataKey="total" fill="#b45309" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Team Rankings */}
-          <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
-            <h2 className="text-xl font-['Cinzel'] text-amber-400 mb-4 text-center">
-              Team Rankings
-            </h2>
-            <div className="h-[300px]">
-              <ResponsiveContainer>
-                <BarChart data={teams}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#78350f" strokeOpacity={0.3} />
-                  <XAxis dataKey="name" interval={0} angle={-45} textAnchor="end" height={80} stroke="#fcd34d" />
-                  <YAxis stroke="#fcd34d" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1f2937',
-                      border: '1px solid #78350f',
-                      borderRadius: '4px',
-                      color: '#fcd34d'
-                    }}
-                  />
-                  <Bar dataKey="accuracy" fill="#d97706" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+        {/* Team-wise Leaderboard */}
+        <div className="bg-gray-800 text-amber-100 rounded-2xl p-4 shadow-lg border-2 border-amber-900/30">
+          <h2 className="text-xl font-semibold mb-4 text-center text-amber-400 font-serif">
+            ⚡ Team-wise Leaderboard
+          </h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={teamScores}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#78350f" strokeOpacity={0.3} />
+              <XAxis
+                dataKey="name"
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                stroke="#fcd34d"
+              />
+              <YAxis stroke="#fcd34d" />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1f2937',
+                  border: '1px solid #78350f',
+                  borderRadius: '4px',
+                  color: '#fcd34d'
+                }}
+              />
+              <Bar dataKey="score" fill="#d97706" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>
