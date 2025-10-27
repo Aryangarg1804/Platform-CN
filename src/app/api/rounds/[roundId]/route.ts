@@ -1,64 +1,61 @@
 import { NextResponse, NextRequest } from 'next/server'
 import { connectDB } from '@/lib/mongoose'
-import Round, { IRoundResult, IRound } from '@/models/Round' // Assuming IRound and IRoundResult are in your models/Round.ts
-import Team, { ITeam } from '@/models/Team' // Assuming ITeam is in your models/Team.ts
+import Round, { IRoundResult, IRound } from '@/models/Round' 
+import Team, { ITeam } from '@/models/Team' 
+import { getUserFromHeader } from '@/lib/roundHeadAuth' 
+import mongoose from 'mongoose' // Need this import for ObjectId casting
 
-// Define the expected structure for the populated and leaned data
-// We must mirror the structure of IRound but with 'team' populated and objects being plain (LeanedDocument)
+// --- Interface Definitions for Leaned/Populated Data ---
+// NOTE: ITeam is assumed to be defined in src/models/Team.ts
 interface LeanedRoundResult extends Omit<IRoundResult, 'team'> {
-    // The populated team field, which comes back as a plain object
     team: Pick<ITeam, 'name' | 'house' | 'totalPoints'> | null | undefined; 
 }
 
+// NOTE: IRound is assumed to be defined in src/models/Round.ts
 interface LeanedRound extends Omit<IRound, 'results'> {
     results: LeanedRoundResult[];
+    quaffleWinnerHouse?: string; 
 }
 
 
-// GET request to fetch results for a specific round
-// URL format: /api/rounds/round-1, /api/rounds/round-7, etc.
+// --- GET Request (Read Round Results) ---
 export async function GET(
     req: NextRequest, 
     { params }: { params: { roundId: string } }
 ) {
-    const roundId = params.roundId; // e.g., 'round-1', 'round-7'
+    const roundId = params.roundId;
 
     try {
         await connectDB()
 
         const roundData = await Round.findOne({ name: roundId })
-            // Populate the team details using the team ID stored in results.team
+            // Populate the team details
             .populate({
                 path: 'results.team',
                 model: Team,
-                select: 'name house totalPoints' // Select the fields needed for the leaderboard
+                select: 'name house totalPoints'
             })
-            .lean<LeanedRound>() // Cast the lean result to our defined interface
+            .lean<LeanedRound>()
             .exec()
 
-        // Handle the case where the Round document is not found (still null)
         if (!roundData) {
             return NextResponse.json({ success: true, round: { name: roundId, results: [] } })
         }
 
-        // We use a type predicate check (result.team && result.team.name) to filter out null/undefined results.
-        // This is safe because 'results' is guaranteed to exist by the 'LeanedRound' type and the previous null check.
         const filteredResults = roundData.results.filter(
             (result): result is LeanedRoundResult => !!(result.team && result.team.name)
         );
         
-        // Ensure the results are ranked correctly (descending score, if points is the primary field)
+        // Ensure the results are ranked correctly (descending score/points)
         filteredResults.sort((a, b) => b.points - a.points);
 
 
         return NextResponse.json({ 
             success: true, 
             round: {
-                // We spread roundData, knowing it is a LeanedRound now
                 ...roundData,
                 results: filteredResults,
-                // Ensure name is passed correctly as roundId
-                name: roundId 
+                name: roundId,
             } 
         })
 
@@ -68,14 +65,56 @@ export async function GET(
     }
 }
 
-// POST is usually used by the admin/round-head dashboards to save results.
+// --- POST Request (Save Final Round Results and Lock Status) ---
 export async function POST(
     req: NextRequest, 
     { params }: { params: { roundId: string } }
 ) {
     const roundId = params.roundId;
 
-    // A complete implementation would update the Round model in the database here.
-    
-    return NextResponse.json({ success: true, message: `POST received for ${roundId}` });
+    try {
+        await connectDB();
+        
+        // 1. Authorization Check 
+        const user = getUserFromHeader(req.headers.get('authorization'));
+        if (!user || (user.role !== 'admin' && user.role !== 'round-head')) {
+            return NextResponse.json({ success: false, error: 'Forbidden. Must be Admin or Round Head.' }, { status: 403 });
+        }
+
+        const { results, approved } = await req.json();
+
+        if (!Array.isArray(results)) {
+            return NextResponse.json({ success: false, error: 'Invalid results format.' }, { status: 400 });
+        }
+
+        // 2. Format incoming team results (converting ID strings to Mongoose ObjectIds)
+        const formattedResults = results.map(r => ({
+            // Mongoose.Types.ObjectId(r.team) is the correct way to cast ID string to ObjectId
+            team: new mongoose.Types.ObjectId(r.team), 
+            points: Number(r.points) || 0,
+            time: Number(r.time) || 0,
+            rank: Number(r.rank) || 0,
+        }));
+        
+        const update = {
+            name: roundId,
+            roundNumber: Number(roundId.split('-')[1]) || 0,
+            results: formattedResults,
+            // Only update isLocked if 'approved' flag is explicitly sent
+            ...(approved !== undefined && { isLocked: approved }) 
+        };
+
+        // 3. Save results to the Round document
+        const round = await Round.findOneAndUpdate(
+            { name: roundId },
+            { $set: update },
+            { upsert: true, new: true }
+        );
+
+        return NextResponse.json({ success: true, message: 'Round results finalized and saved.', round });
+
+    } catch (err) {
+        console.error(`POST /api/rounds/${roundId} error:`, err);
+        return NextResponse.json({ success: false, error: 'Failed to save round results.' }, { status: 500 });
+    }
 }

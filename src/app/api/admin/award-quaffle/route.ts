@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongoose'
 import HouseLeaderboard from '@/models/HouseLeaderboard'
+import Round from '@/models/Round' // <<< ADDED: Import Round model
 import { getUserFromHeader, canAccessRound, getRoundNumber } from '@/lib/roundHeadAuth'
 
 export async function POST(req: NextRequest) {
@@ -18,8 +19,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // increment quaffles for the house
+    // 1. Increment Quaffles for the overall House Leaderboard (Original logic)
     const hb = await HouseLeaderboard.findOneAndUpdate({ house }, { $inc: { quaffles: 1 } }, { new: true, upsert: true })
+    
+    // 2. IMPORTANT: Update the specific Round document to track the winner for public display
+    // This makes the winner available to the public/round-N pages.
+    await Round.findOneAndUpdate({ name: round }, { quaffleWinnerHouse: house }, { upsert: true }); // <<< NEW LOGIC
 
     return NextResponse.json({ success: true, house: hb })
   } catch (err) {

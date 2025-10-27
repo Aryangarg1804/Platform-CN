@@ -1,4 +1,15 @@
-import mongoose, { Schema } from 'mongoose'
+import mongoose, { Schema, Document } from 'mongoose'
+
+// Define the ITeam interface for type safety (must be exported)
+export interface ITeam extends Document { 
+    name: string;
+    house: 'Gryffindor' | 'Hufflepuff' | 'Ravenclaw' | 'Slytherin';
+    totalPoints: number;
+    score: number;
+    roundsParticipating: number[];
+    isActive: boolean;
+    isEliminated: boolean;
+}
 
 // Define schema for a team (single source of truth)
 const TeamSchema = new Schema(
@@ -26,4 +37,4 @@ const TeamSchema = new Schema(
 )
 
 // Prevent model overwrite on hot reload in Next.js
-export default mongoose.models.Team || mongoose.model('Team', TeamSchema)
+export default mongoose.models.Team || mongoose.model<ITeam>('Team', TeamSchema)

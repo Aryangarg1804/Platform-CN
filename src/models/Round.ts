@@ -12,6 +12,7 @@ export interface IRound extends Document {
   name: string
   results: IRoundResult[]
   isLocked: boolean
+  quaffleWinnerHouse?: string; // <<< NEW FIELD
   createdAt: Date
   updatedAt: Date
 }
@@ -28,6 +29,7 @@ const RoundSchema = new Schema<IRound>({
   name: String,
   results: [RoundResultSchema],
   isLocked: { type: Boolean, default: false },
+  quaffleWinnerHouse: { type: String, required: false }, // <<< NEW SCHEMA FIELD
 }, { timestamps: true })
 
 export default mongoose.models.Round || mongoose.model<IRound>('Round', RoundSchema)
