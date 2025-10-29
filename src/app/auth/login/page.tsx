@@ -45,60 +45,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <style>{`
-      
-        @font-face {
-          font-family: 'Harry P';
-          }
-        
-        body {
-          margin: 0;
-          padding: 0;
-          font-family: 'Cinzel', serif;
-        }
-        
-        .harry-font {
-          font-family: 'Harry P', 'Cinzel', serif;
-        }
-        
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(5deg); }
-        }
-        
-        @keyframes shimmer {
-          0% { opacity: 0.3; }
-          50% { opacity: 0.8; }
-          100% { opacity: 0.3; }
-        }
-        
-        @keyframes steam {
-          0% { transform: translateY(0) scale(1); opacity: 0.6; }
-          100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
-        }
-        
-        @keyframes glow-pulse {
-          0%, 100% { box-shadow: 0 0 20px rgba(236, 185, 57, 0.3), 0 0 40px rgba(236, 185, 57, 0.2); }
-          50% { box-shadow: 0 0 30px rgba(236, 185, 57, 0.5), 0 0 60px rgba(236, 185, 57, 0.3); }
-        }
-        
-        .animate-float {
-          animation: float 3s ease-in-out infinite;
-        }
-        
-        .animate-shimmer {
-          animation: shimmer 2s ease-in-out infinite;
-        }
-        
-        .animate-steam {
-          animation: steam 4s ease-out infinite;
-        }
-        
-        .animate-glow {
-          animation: glow-pulse 2s ease-in-out infinite;
-        }
-      `}</style>
-
+    
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0E1A40] via-[#1a2654] to-[#0E1A40] relative overflow-hidden">
         {/* Brick wall texture overlay */}
         <div className="absolute inset-0 opacity-5" style={{
