@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { canAccessRound } from '@/lib/roundHeadAuth'
+import { canAccessRound } from '@/lib/roundHeadAuth' //
 
 // Define Team interface for score management
 interface Team {
@@ -36,108 +36,131 @@ interface RoundResult {
 export default function Round6() {
   const [user, setUser] = useState<any>(null)
   const [roundLocked, setRoundLocked] = useState(true)
-  // Round 6 uses all four houses
-  const houses = ['Gryffindor', 'Hufflepuff', 'Ravenclaw', 'Slytherin']
+  const houses = ['Gryffindor', 'Hufflepuff', 'Ravenclaw', 'Slytherin'];
 
   const [teams, setTeams] = useState<Team[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState({ text: '', type: 'info' })
+  const [roundWinner, setRoundWinner] = useState<string | null>(null); // State for winner
 
   // Auth check on mount
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
     if (!token) {
-      window.location.href = '/auth/login'
+      window.location.href = '/auth/login' //
       return
     }
     try {
       const payload = JSON.parse(atob(token.split('.')[1]))
       if (!canAccessRound(payload, 6)) { // Check for Round 6 access
-        window.location.href = '/auth/login'
+        window.location.href = '/auth/login' //
         return
       }
       setUser(payload)
     } catch (e) {
       console.error('Authentication error:', e)
-      window.location.href = '/auth/login'
+      window.location.href = '/auth/login' //
     }
   }, [])
 
-  // Fetch teams and round status from DB on mount and on poll
+  // Fetch teams, round status, and winner
   const fetchData = useCallback(async () => {
     if (!user) return
 
+    // Get the current state of pointsToAdd *before* fetching
+    // This local copy won't be stale during the fetch
+    let currentPointsMap = new Map<string, number>();
+    setTeams(currentTeams => {
+        currentPointsMap = new Map(currentTeams.filter(t => t._id).map(t => [t._id!, t.pointsToAdd]));
+        return currentTeams; // Return the same state, we just needed to read it
+    });
+
     try {
       // 1. Get round lock status
-      const statusRes = await fetch('/api/admin/round-status?round=round-6')
+      const statusRes = await fetch('/api/admin/round-status?round=round-6'); //
       const statusData = await statusRes.json()
       setRoundLocked(statusData.isLocked)
 
-      // 2. Get teams (for scoring and charts)
-      const teamsRes = await fetch('/api/admin/teams')
+      // 2. Fetch current round winner status
+      const roundDetailsRes = await fetch('/api/rounds/round-6'); ///route.ts]
+      const roundDetailsData = await roundDetailsRes.json();
+      if (roundDetailsRes.ok && roundDetailsData.round) {
+        setRoundWinner(roundDetailsData.round.quaffleWinnerHouse || null);
+      } else {
+         console.warn('Could not fetch round 6 details or winner.');
+         setRoundWinner(null);
+      }
+
+      // 3. Get teams (for scoring and charts)
+      const teamsRes = await fetch('/api/admin/teams'); //
       const teamsData: any[] = await teamsRes.json()
 
-      // Map current teams input state to preserve any pointsToAdd that haven't been saved
-      const currentPointsToAddMap = new Map(teams.filter(t => t._id).map(t => [t._id, t.pointsToAdd]));
+      if (teamsData && Array.isArray(teamsData)) {
 
-      if (teamsData && teamsData.length) {
-        
-        // Filter teams that are ACTIVE and NOT ELIMINATED
         const relevantTeams = teamsData.filter(t => t.isActive !== false && t.isEliminated !== true);
-        
-        // 1. Map DB teams to local format
+
         let mappedTeams: Team[] = relevantTeams
             .map((dbTeam: any) => {
                 const dbId = dbTeam._id;
+                // Check if we are *not* saving, and preserve points.
+                // If we *are* saving (or just finished), we want to reset points to 0.
+                const oldPoints = saving ? 0 : (currentPointsMap.get(dbId) || 0);
+
                 return {
-                    id: 0, // Temporary ID for sorting
+                    id: 0,
                     _id: dbId,
                     name: dbTeam.name,
                     house: dbTeam.house,
                     totalScore: dbTeam.totalPoints || 0,
-                    isActive: dbTeam.isActive,
-                    isEliminated: dbTeam.isEliminated || false,
-                    // Retrieve old pointsToAdd value or reset to 0
-                    pointsToAdd: currentPointsToAddMap.get(dbTeam._id) || 0,
+                    isActive: dbTeam.isActive !== false,
+                    isEliminated: dbTeam.isEliminated === true,
+                    // Reset pointsToAdd to 0, or preserve old value if not part of a save operation
+                    pointsToAdd: oldPoints
                 };
             });
-        
-        // 2. SORT TEAMS: Sort by house (A-Z) then by name (A-Z)
+
         mappedTeams.sort((a, b) => {
           if (a.house < b.house) return -1;
           if (a.house > b.house) return 1;
           return a.name.localeCompare(b.name);
         });
 
-        // 3. Reassign sequential IDs after sorting to keep the first column logical
         mappedTeams.forEach((team, index) => team.id = index + 1);
 
         setTeams(mappedTeams);
       } else {
+        console.warn("Received unexpected data format from /api/admin/teams or no teams found.");
         setTeams([]);
       }
     } catch (err) {
       console.error('Failed to load data:', err)
       setMessage({ text: 'Failed to load data', type: 'error' })
+      setTimeout(() => setMessage({ text: '', type: 'info' }), 3000);
     } finally {
       setLoading(false)
     }
-  }, [user])
+  // Removed 'teams' dependency to prevent loops. 'saving' is also managed locally.
+  }, [user, saving])
 
-  // Initial fetch and polling
+
+  // Initial fetch (NO POLLING)
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 10000) // poll every 10s
-    return () => clearInterval(interval)
-  }, [fetchData])
+    if(user){ // Only run if user is set
+        fetchData()
+        // REMOVED: const interval = setInterval(fetchData, 10000)
+        // REMOVED: return () => clearInterval(interval)
+    }
+  }, [fetchData, user]) // Only depends on fetchData and user
 
   // Handle changes for points to add
   const handleScoreChange = (id: number, value: number) => {
+    if (roundLocked) return;
     setTeams(prev =>
-      prev.map(team => (team.id === id ? { ...team, pointsToAdd: value } : team))
-    )
-  }
+      prev.map(team => (team.id === id ? { ...team, pointsToAdd: value >= 0 ? value : 0 } : team)) // Ensure points are non-negative
+    );
+     setMessage({ text: '', type: 'info'}); // Clear message on edit
+  };
 
   // Calculate house-wise totals for charts (based on total score)
   const houseScores = houses.map(house => ({
@@ -160,107 +183,172 @@ export default function Round6() {
   // Save functionality for SCORE ADDITION
   const saveScores = async () => {
     if (roundLocked) {
-        setMessage({ text: 'Round is currently locked by the admin. Cannot save scores.', type: 'error' })
+        setMessage({ text: 'Round is locked by Admin. Cannot save scores.', type: 'error' })
         setTimeout(() => setMessage({ text: '', type: 'info' }), 3000)
         return
     }
 
-    setSaving(true)
+    setSaving(true) // Set saving true
+    setMessage({ text: 'Saving added points...', type: 'info' });
     try {
       const token = localStorage.getItem('token')
 
-      // 1. Prepare data for POST /api/admin/teams (Performs $inc/addition)
       const teamsToUpdate = teams
-        .filter(t => t.pointsToAdd > 0 && t._id) // Only send if points added and team has a DB ID
+        .filter(t => t.pointsToAdd > 0 && t._id)
         .map(team => ({
           _id: team._id,
-          name: team.name, 
+          name: team.name,
           house: team.house,
-          score: team.pointsToAdd // Mapped to $inc totalPoints on backend 
+          score: team.pointsToAdd
         }));
 
       if (teamsToUpdate.length === 0) {
-        setMessage({ text: 'No new points to add. Ensure you have entered scores > 0.', type: 'info' })
-        setSaving(false);
+        setMessage({ text: 'No new points to add. Enter scores > 0.', type: 'info' })
+        setSaving(false); // Reset saving state
         setTimeout(() => setMessage({ text: '', type: 'info' }), 3000)
         return;
       }
 
-      const teamSaveRes = await fetch('/api/admin/teams', { // Use Admin endpoint for $inc logic
+      const teamSaveRes = await fetch('/api/admin/teams', { //
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(teamsToUpdate),
-      })
+      });
+
+      const saveData = await teamSaveRes.json();
 
       if (!teamSaveRes.ok) {
-          const errorData = await teamSaveRes.json()
-          throw new Error(errorData.error || 'Failed to save scores data.')
+          if(teamSaveRes.status === 403){
+             throw new Error(saveData.error || 'Permission Denied. Contact Admin.');
+          }
+          throw new Error(saveData.error || 'Failed to save scores data.');
       }
 
-      // 2. Refresh data immediately to show updated total scores and reset input fields
-      await fetchData();
+      const resultsForLog: RoundResult[] = teams
+          .filter(t => t._id)
+          .map((team) => {
+            const savedUpdate = teamsToUpdate.find(u => u._id === team._id);
+            return {
+              team: team._id || '',
+              points: savedUpdate ? savedUpdate.score : 0,
+              rank: 0,
+              time: 0,
+           };
+          })
+          .sort((a, b) => b.points - a.points)
+          .map((r, idx) => ({ ...r, rank: idx + 1 }));
 
-      // 3. Save round results (logs the state of this round to the Round model)
-      // Use the newly fetched data (stored in `teams` after fetchData) to submit round results
-      const results: RoundResult[] = teams.filter(t => t.name.trim() !== '').map((team, idx) => ({
-          team: team._id || '',
-          points: team.totalScore, // Send the current total score
-          rank: idx + 1,
-          time: 0,
-      }));
 
-      await fetch('/api/rounds/round-6', { // Submitting to round-6 endpoint
+      const logRes = await fetch('/api/rounds/round-6', { ///route.ts]
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ results, approved: true }),
-      })
+        body: JSON.stringify({ results: resultsForLog, approved: true }),
+      });
 
-      setMessage({ text: 'Points added and scores updated successfully!', type: 'success' })
+       if (!logRes.ok) {
+          const logErrorData = await logRes.json();
+          console.warn('Failed to log round results:', logErrorData.error);
+          setMessage({ text: 'Points saved, but failed to log round results. Contact Admin.', type: 'error' });
+       } else {
+           setMessage({ text: 'Points added and round results logged successfully!', type: 'success' });
+       }
+
+      // fetchData() will be triggered by setSaving(false) in the finally block,
+      // which will then use saving=true in its logic to reset pointsToAdd
+      // await fetchData(); // Not needed here, finally block handles it
+
     } catch (err: any) {
       console.error(err)
-      setMessage({ text: 'Error saving scores: ' + err.message, type: 'error' })
+      setMessage({ text: `Error saving scores: ${err.message}`, type: 'error' })
     } finally {
-      setSaving(false)
-      setTimeout(() => setMessage({ text: '', type: 'info' }), 3000)
+      setSaving(false) // Set saving false, this will trigger fetchData
+      setTimeout(() => {
+          if (message.type !== 'error') setMessage({ text: '', type: 'info' })
+      }, 4000);
     }
   }
 
   // Helper to award quaffle
   const awardQuaffle = async (house: string, roundId = 'round-6') => {
     if (roundLocked) {
-        setMessage({ text: 'Round is currently locked by the admin. Cannot award quaffle.', type: 'error' })
+        setMessage({ text: 'Round is locked by Admin. Cannot award.', type: 'error' })
         setTimeout(() => setMessage({ text: '', type: 'info' }), 3000)
         return
     }
+    if (roundWinner) {
+        setMessage({ text: `Cannot award: ${roundWinner} already won. Revert first if needed.`, type: 'error'});
+        setTimeout(() => setMessage({ text: '', type: 'info' }), 4000);
+        return;
+    }
+
+    setMessage({ text: `Awarding quaffle to ${house}...`, type: 'info' });
     const token = localStorage.getItem('token')
     try {
-        const res = await fetch('/api/admin/award-quaffle', {
+        const res = await fetch('/api/admin/award-quaffle', { //
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({house: house, round: roundId}) // Round 6 quaffle
+            body: JSON.stringify({house: house, round: roundId})
         });
         if (!res.ok) throw new Error('Failed to award quaffle.');
+        setRoundWinner(house);
         setMessage({ text: `Quaffle awarded to ${house}!`, type: 'success' })
     } catch(e: any) {
         console.error(e)
-        setMessage({ text: 'Failed to award quaffle.', type: 'error' })
+        setMessage({ text: `Failed to award quaffle: ${e.message}`, type: 'error' })
     }
     setTimeout(() => setMessage({ text: '', type: 'info' }), 3000)
+  }
+
+   // Helper to revert quaffle
+   const revertQuaffle = async (house: string, roundId = 'round-6') => {
+      if (roundLocked) {
+        setMessage({ text: 'Round is locked by Admin. Cannot revert.', type: 'error'});
+        setTimeout(() => setMessage({ text: '', type: 'info' }), 3000);
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to REVERT the Quaffle from ${house} for Round 6?`)) {
+          return;
+      }
+
+      setMessage({ text: `Reverting Quaffle from ${house}...`, type: 'info' });
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch('/api/admin/revert-quaffle', { //
+            method: 'POST',
+            headers:{'Content-Type':'application/json', 'Authorization': `Bearer ${token}`},
+            body: JSON.stringify({ house, round: roundId })
+        });
+
+        if (!res.ok) {
+           const errorData = await res.json();
+           throw new Error(errorData.error || 'Failed to revert quaffle.');
+        }
+
+        setRoundWinner(null);
+        setMessage({ text: `Quaffle successfully REVERTED from ${house}!`, type: 'success' });
+
+      } catch (e: any) {
+          console.error('Revert failed:', e);
+          setMessage({ text: `Revert failed: ${e.message}`, type: 'error' });
+      } finally {
+        setTimeout(() => setMessage({ text: '', type: 'info' }), 5000);
+      }
   }
 
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-400 text-2xl font-['Cinzel']">
-      Loading...
+      Loading Round 6 Dashboard...
     </div>
   )
 
@@ -271,24 +359,22 @@ export default function Round6() {
           <h1 className="text-4xl font-bold mb-4 text-amber-400 font-['Cinzel']">
             Round 6 Dashboard (Round Head): Flash Videos
           </h1>
-          <p className="text-xl mb-4">Enter points for surviving teams. 4 Houses Enabled.</p>
-          {/* Read-Only Lock Status Display */}
+          <p className="text-xl mb-4">Enter points for surviving teams and manage the Quaffle.</p>
           <div className={`inline-block px-4 py-2 rounded font-semibold ${
             roundLocked ? 'bg-red-900 border-red-500 border-2 text-white' : 'bg-green-900 border-green-500 border-2 text-white'
           }`}>
-            {roundLocked ? '🔒 Round Locked - Read Only' : '🔓 Round Unlocked - Ready for Scoring'}
+            {roundLocked ? '🔒 Locked by Admin - View Only' : '🔓 Unlocked - Ready for Scoring'}
           </div>
         </header>
 
         {message.text && (
           <div className={`p-4 mb-6 rounded text-center ${
-            message.type === 'error' ? 'bg-red-900' : 'bg-green-900'
+            message.type === 'error' ? 'bg-red-900 border-red-700 text-red-300' : message.type === 'success' ? 'bg-green-900 border-green-700 text-green-300' : 'bg-blue-900 border-blue-700 text-blue-300'
           }`}>
             {message.text}
           </div>
         )}
 
-        {/* Team Scoring Table */}
         <div className="bg-gray-800 rounded-2xl p-6 mb-8 shadow-lg border-2 border-amber-900/30">
           <h2 className="text-2xl font-['Cinzel'] text-amber-400 mb-4">Team Scores</h2>
           <div className="overflow-x-auto">
@@ -305,24 +391,21 @@ export default function Round6() {
               </thead>
               <tbody>
                 {teams.map(team => (
-                  <tr key={team.id} className="border-b border-amber-900/30 hover:bg-gray-700/50">
+                  <tr key={team.id} className={`border-b border-amber-900/30 hover:bg-gray-700/50 ${team.isEliminated ? 'opacity-50' : ''}`}>
                     <td className="p-2 text-center">{team.id}</td>
                     <td className="p-2">
-                        {/* Team Name: Always disabled */}
                         <input type="text" className="w-36 bg-gray-700 border-gray-600 rounded p-1 text-amber-100 text-center" value={team.name} disabled={true} />
                     </td>
                     <td className="p-2">
-                        {/* House: Always disabled */}
                         <input type="text" className="w-28 bg-gray-700 border-gray-600 rounded p-1 text-amber-100 text-center" value={team.house} disabled={true} />
                     </td>
                     <td className="p-2 text-amber-300 font-semibold">{team.totalScore}</td>
                     <td className="p-2">
-                        {/* Points to Add: Editable when unlocked */}
                         <input
                             type="number"
-                            className="w-24 bg-gray-700 border border-amber-900/50 rounded p-1 text-amber-100 text-right"
+                            className={`w-24 bg-gray-700 border ${roundLocked ? 'border-gray-600' : 'border-amber-900/50'} rounded p-1 text-amber-100 text-right disabled:opacity-70 disabled:cursor-not-allowed`}
                             value={team.pointsToAdd}
-                            onChange={e => handleScoreChange(team.id, Number(e.target.value) < 0 ? 0 : Number(e.target.value))}
+                            onChange={e => handleScoreChange(team.id, Number(e.target.value))}
                             disabled={roundLocked}
                             placeholder="0"
                             min="0"
@@ -330,55 +413,77 @@ export default function Round6() {
                     </td>
                      <td className="p-2">
                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                            team.isActive ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
+                            team.isEliminated ? 'bg-red-900/70 text-red-200' :
+                            team.isActive ? 'bg-green-900/50 text-green-300' :
+                            'bg-gray-600/50 text-gray-300'
                           }`}>
-                            {team.isActive ? 'Active' : 'Inactive'}
+                            {team.isEliminated ? 'Eliminated' : team.isActive ? 'Active' : 'Inactive'}
                           </span>
                     </td>
                   </tr>
                 ))}
+                {teams.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-4 text-center text-amber-200/70 italic">
+                        No active, non-eliminated teams found for Round 6.
+                      </td>
+                    </tr>
+                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Save Button */}
         {!roundLocked && (
           <div className="text-center mb-8">
             <button
               onClick={saveScores}
               disabled={saving || roundLocked}
-              className="bg-gradient-to-r from-amber-700 to-amber-900 text-amber-100 font-bold py-3 px-8 rounded-lg border-2 border-amber-400/30 hover:from-amber-800 hover:to-amber-950 transition-all shadow-lg disabled:opacity-50"
+              className="bg-gradient-to-r from-amber-700 to-amber-900 text-amber-100 font-bold py-3 px-8 rounded-lg border-2 border-amber-400/30 hover:from-amber-800 hover:to-amber-950 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saving ? 'Saving...' : '💾 Save Added Points & Submit Round Results'}
+              {saving ? 'Saving...' : '💾 Save Added Points & Submit Results'}
             </button>
+             <p className="text-xs text-amber-300/70 mt-2 italic">(This saves points to totals and logs the round result)</p>
           </div>
         )}
 
-        {/* Award Quaffle (4 Houses) */}
         <div className="mb-8 p-6 bg-gray-800 rounded-2xl shadow-lg border-2 border-amber-900/30 text-center">
-            <h2 className="text-2xl font-['Cinzel'] text-amber-400 mb-4">Award Round 6 Quaffle</h2>
-            <p className="mb-4 text-amber-200">Select the house winner of the Round 6:</p>
-            <div className="flex justify-center gap-4 flex-wrap">
-              {houses.map(h=>
-                <button
-                  key={h}
-                  onClick={()=>awardQuaffle(h)}
-                  disabled={roundLocked} // Disabled when locked
-                  className="px-4 py-2 bg-amber-700 rounded text-white font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Give {h} Quaffle
-                </button>
+            <h2 className="text-2xl font-['Cinzel'] text-amber-400 mb-4">Manage Round 6 Quaffle</h2>
+             {roundWinner ? (
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-yellow-400 mb-4">🏆 Current Winner: {roundWinner} 🏆</p>
+                  <button
+                    onClick={() => revertQuaffle(roundWinner)}
+                    disabled={roundLocked || saving}
+                    className="px-6 py-2 bg-red-800 hover:bg-red-700 rounded-md text-white font-semibold transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Revert Quaffle from {roundWinner}
+                  </button>
+                </div>
+              ) : (
+                 <>
+                    <p className="text-amber-200 mb-4 text-xl">Select the house winner for Round 6:</p>
+                    <div className="flex justify-center gap-4 flex-wrap">
+                      {houses.map(h=>
+                        <button
+                          key={h}
+                          onClick={()=>awardQuaffle(h)}
+                          disabled={roundLocked || !!roundWinner || saving}
+                          className="px-4 py-2 bg-amber-700 rounded text-white font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Give {h} Quaffle
+                        </button>
+                      )}
+                    </div>
+                 </>
               )}
-            </div>
+             {roundLocked && <p className="text-red-400 text-sm mt-4 italic">(Round must be unlocked by Admin to manage Quaffles)</p>}
         </div>
 
-        {/* Leaderboards */}
-        <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-10">
-          {/* House-wise scores */}
+        <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-10 mt-12">
           <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
             <h2 className="text-xl font-['Cinzel'] text-amber-400 mb-4 text-center">
-              🏆 House-wise Leaderboard
+              House Leaderboard (Overall)
             </h2>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height={300}>
@@ -394,16 +499,15 @@ export default function Round6() {
                       color: '#fcd34d'
                     }}
                   />
-                  <Bar dataKey="total" fill="#b45309" />
+                  <Bar dataKey="total" fill="#b45309" name="Total Score"/>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Team Rankings */}
           <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
             <h2 className="text-xl font-['Cinzel'] text-amber-400 mb-4 text-center">
-              ⚡ Team-wise Leaderboard
+              Team Leaderboard (Overall)
             </h2>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height={300}>
@@ -416,10 +520,10 @@ export default function Round6() {
                       backgroundColor: '#1f2937',
                       border: '1px solid #78350f',
                       borderRadius: '4px',
-                      color: '#fcd34d'
+                      color: '#fcd3d'
                     }}
                   />
-                  <Bar dataKey="score" fill="#d97706" />
+                  <Bar dataKey="score" fill="#d97706" name="Total Score"/>
                 </BarChart>
               </ResponsiveContainer>
             </div>

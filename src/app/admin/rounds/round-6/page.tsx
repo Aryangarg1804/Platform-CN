@@ -52,7 +52,7 @@ export default function Round6() {
       setRoundLocked(statusData.isLocked);
 
       // 2. Fetch current round winner status
-      const roundDetailsRes = await fetch('/api/rounds/round-6'); // Fetch round details/route.ts]
+      const roundDetailsRes = await fetch('/api/rounds/round-6'); // Fetch round details
       const roundDetailsData = await roundDetailsRes.json();
       if (roundDetailsRes.ok && roundDetailsData.round) {
         setRoundWinner(roundDetailsData.round.quaffleWinnerHouse || null); // Update winner state
@@ -201,7 +201,7 @@ export default function Round6() {
 
        savedTeamData = await teamSaveRes.json(); // Store response
 
-       if (!teamSaveRes.ok || !savedTeamData.success) {
+       if (!teamSaveRes.ok || !savedTeamData.success) { // Check success flag from API
          throw new Error(savedTeamData.error || 'Failed to apply score adjustment.');
        }
 
@@ -218,7 +218,7 @@ export default function Round6() {
                 rank: idx + 1, // Rank based on this round's score
             }));
 
-        const submitRes = await fetch('/api/rounds/round-6', { ///route.ts]
+        const submitRes = await fetch('/api/rounds/round-6', { //
             method: 'POST',
             headers,
             body: JSON.stringify({ results: resultsForRoundLog, approved: true }),
@@ -252,8 +252,6 @@ export default function Round6() {
     }
   };
 
-  // REMOVED: Original separate submitRoundResults function
-
   // Helper to award quaffle
   async function awardQua(house:string){
     if (roundLocked) {
@@ -286,7 +284,7 @@ export default function Round6() {
     setTimeout(() => setMessage(''), 3000);
   }
 
-  // **NEW**: Helper to revert quaffle
+  // Helper to revert quaffle
   const revertQua = async (house: string, roundId = 'round-6') => {
       if (roundLocked) {
         setMessage('Round is locked. Cannot revert quaffle.');
@@ -360,7 +358,7 @@ export default function Round6() {
                     <th className="p-3">Team Name</th>
                     <th className="p-3">House</th>
                     <th className="p-3">Current Total Points</th>
-                    <th className="p-3">Points to Add/Subtract (Round 6)</th> {/* Allow negative */}
+                    <th className="p-3">Points to Add/Subtract (Round 6)</th>
                     <th className="p-3">Status</th>
                   </tr>
                 </thead>
@@ -372,13 +370,12 @@ export default function Round6() {
                       <td className="p-3 text-amber-300">{team.totalPoints}</td>
                       <td className="p-3">
                         <input
-                          type="number" // Allows negative input
+                          type="number"
                           value={team.score}
                           onChange={e => handleChange(team.id, e.target.value)}
                           disabled={roundLocked}
                           className={`w-24 bg-gray-700 border ${roundLocked ? 'border-gray-600' : 'border-amber-900/50'} rounded p-1 text-amber-100 text-right focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-70 disabled:cursor-not-allowed`}
                            placeholder="0"
-                           // Removed min="0" to allow negative scores
                         />
                       </td>
                        <td className="p-3">
@@ -398,7 +395,6 @@ export default function Round6() {
                 </tbody>
               </table>
             </div>
-             {/* **COMBINED** Save & Submit Button */}
             {!roundLocked && (
               <div className="text-center mt-6">
                  <button
