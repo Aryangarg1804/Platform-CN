@@ -600,45 +600,6 @@ export default function Round2() {
              </div>
              {roundLocked && <p className="text-red-400 text-xs mt-3 italic">(Round locked by Admin)</p>}
          </div>
-
-
-        {/* Visualizations (Remains the same as admin version) */}
-        {teams.length > 0 && (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
-            <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
-                <h2 className="text-xl font-['Cinzel'] text-amber-400 mb-4 text-center"> House Rankings (Overall Points) </h2> {/* Changed label */}
-                <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={houseScores}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#78350f" strokeOpacity={0.3} />
-                            <XAxis dataKey="name" stroke="#fcd34d" />
-                            <YAxis stroke="#fcd34d" />
-                            <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #78350f', borderRadius: '4px', color: '#fcd34d'}}/>
-                            <Legend />
-                            <Bar dataKey="total" fill="#b45309" name="Overall Points" /> {/* Changed name */}
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-            <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
-                <h2 className="text-xl font-['Cinzel'] text-amber-400 mb-4 text-center"> Team Rankings (Overall Points) </h2> {/* Changed label */}
-                <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                        {/* Changed data source to teams and dataKey to totalPoints */}
-                        <BarChart data={teams.sort((a,b) => b.totalPoints - a.totalPoints)}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#78350f" strokeOpacity={0.3} />
-                            <XAxis dataKey="name" interval={0} angle={-45} textAnchor="end" height={80} stroke="#fcd34d" />
-                            <YAxis stroke="#fcd34d" />
-                            <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #78350f', borderRadius: '4px', color: '#fcd34d' }}/>
-                            <Legend />
-                            <Bar dataKey="totalPoints" fill="#d97706" name="Overall Points"/> {/* Changed key and name */}
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-           </div>
-        )}
-
       </div> {/* End max-w-7xl */}
     </div> // End main container
   );
