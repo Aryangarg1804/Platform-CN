@@ -1,7 +1,7 @@
 // src/app/api/admin/teams/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongoose";
-import Team, { ITeam } from "@/models/Team"; // Import ITeam interface
+import Team from "@/models/Team"; // Import ITeam interface
 import Potion from "@/models/Potion";
 import Log from '@/models/Log';
 import { Types } from "mongoose";
@@ -25,10 +25,26 @@ export async function POST(req: NextRequest) {
     const potionCountAdjustments: { [potionId: string]: number } = {};
 
     for (const teamUpdate of teamsArray) {
-      if (!teamUpdate._id) {
-          console.warn("Skipping team update: Missing _id.", teamUpdate);
-          continue;
-      }
+  // 🟢 If team has no _id → create a new one instead of skipping
+  if (!teamUpdate._id) {
+      console.log("🆕 Creating new team:", teamUpdate);
+      const newTeam = new Team({
+        name: teamUpdate.name,
+        house: teamUpdate.house,
+        totalPoints: teamUpdate.totalPoints || 0,
+        score: teamUpdate.score || 0,
+        roundsParticipating: teamUpdate.roundsParticipating || [1, 2, 3, 4],
+        isActive: teamUpdate.isActive ?? true,
+        isEliminated: teamUpdate.isEliminated ?? false,
+        potionCreatedRound2: teamUpdate.potionCreatedRound2 || null
+      });
+
+      const savedTeam = await newTeam.save();
+      updatedTeamIds.push(savedTeam._id);
+      console.log("✅ New team saved:", savedTeam.name);
+      continue;
+  }
+
       // Ensure teamId is a valid ObjectId before proceeding
       let teamId: Types.ObjectId;
       try {
