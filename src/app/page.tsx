@@ -466,29 +466,30 @@ export default function HomePage() {
             </div>
 
             {/* --- Start Trial Button with Decorative Elements --- */}
-            <div className="relative w-full flex justify-center items-center mt-2 sm:mt-4">
+            <div className="relative w-full max-w-[80%] sm:max-w-[60%] md:max-w-[50%] mx-auto flex justify-center items-center mt-2 sm:mt-4">
               {/* Left Line */}
-              <div className="absolute left-0 w-1/3 flex items-center">
-                <div className="h-[2px] flex-grow bg-gradient-to-r from-transparent to-amber-400"></div>
+              <div className="absolute left-0 w-[20%] sm:w-1/4 flex items-center">
+                <div className="h-[1px] sm:h-[2px] flex-grow bg-gradient-to-r from-transparent to-amber-400"></div>
               </div>
 
               {/* Right Line */}
-              <div className="absolute right-0 w-1/3 flex items-center">
-                <div className="h-[2px] flex-grow bg-gradient-to-l from-transparent to-amber-400"></div>
+              <div className="absolute right-0 w-[20%] sm:w-1/4 flex items-center">
+                <div className="h-[1px] sm:h-[2px] flex-grow bg-gradient-to-l from-transparent to-amber-400"></div>
               </div>
 
               {/* Button Container */}
-              <div className="relative">
+              <div className="relative mx-2 sm:mx-4">
                 {/* Outer Border */}
-                <div className="absolute inset-0 border-2 border-amber-400 rounded-md"></div>
+                <div className="absolute inset-0 border border-amber-400 sm:border-2 rounded-md"></div>
                 {/* Button */}
                 <motion.button
                   onClick={() => window.location.href = '/public'}
-                  className="font-magic px-12 sm:px-16 py-3 sm:py-4 
-                            bg-transparent text-white text-xl sm:text-2xl 
+                  className="font-magic px-4 sm:px-8 md:px-12 py-2 sm:py-3 
+                            bg-transparent text-white text-sm sm:text-lg md:text-xl 
                             rounded-md relative z-10 
                             border border-amber-400
-                            uppercase tracking-wider overflow-hidden"
+                            uppercase tracking-wider overflow-hidden
+                            whitespace-nowrap"
                   initial="initial"
                   animate="animate"
                 >
