@@ -1,3 +1,4 @@
+// src/app/admin/rounds/round-7/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react';
@@ -11,6 +12,7 @@ interface Team {
   totalPoints: number; // Overall points from DB
   score: number;      // Points to ADD in this round (UI input)
   isActive: boolean;
+  isEliminated?: boolean; // Added for consistency, might be relevant
 }
 
 // Interface for round submission
@@ -33,6 +35,8 @@ export default function Round7() {
   const [isMounted, setIsMounted] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState(''); // For general messages
+  const [roundWinner, setRoundWinner] = useState<string | null>(null); // State for current winner
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -40,75 +44,117 @@ export default function Round7() {
 
   // Fetch initial data and poll round lock status
   const fetchData = useCallback(async () => {
+    // Keep local message unless specifically cleared
+    // setMessage('');
+    // Only set loading on initial fetch or if already loading
+    if (loading || !teams.length) {
+       setLoading(true);
+    }
     try {
       // 1. Fetch round lock status
-      const statusRes = await fetch('/api/admin/round-status?round=round-7');
+      const statusRes = await fetch('/api/admin/round-status?round=round-7'); // Target round-7
       const statusData = await statusRes.json();
       setRoundLocked(statusData.isLocked);
 
-      // 2. Fetch active teams data (all active, non-eliminated teams for the Finals)
-      const teamsRes = await fetch('/api/admin/teams'); 
-      const teamsData: any[] = await teamsRes.json();
-      
-      if (teamsData && teamsData.length) {
+      // 2. Fetch round details (for quaffle winner)
+      const historicalRes = await fetch('/api/rounds/round-7'); // Target round-7
+      const historicalData = await historicalRes.json();
+      setRoundWinner(historicalData.round?.quaffleWinnerHouse || null);
+
+      // 3. Fetch all teams data (for totalPoints and current roster)
+      const teamsRes = await fetch('/api/admin/teams');
+      const teamsData: any[] = await teamsRes.json(); // Expecting array directly
+
+      if (teamsData && Array.isArray(teamsData)) { // Check if it's an array
         // Filter teams that are active and not eliminated (Round 7 is Finals)
         const relevantTeams = teamsData
             .filter(t => t.isActive !== false && t.isEliminated !== true)
-            
+
         // Map API data to local state structure
-        const filledTeams = relevantTeams.map((dbTeam: any, index: number) => ({
+        let currentId = 1; // Counter for stable UI id
+        const filledTeams = relevantTeams.map((dbTeam: any): Team => ({ // Added return type :Team
           _id: dbTeam._id,
-          id: index + 1, // Assign stable index ID
+          id: currentId++, // Assign stable index ID
           name: dbTeam.name,
           house: dbTeam.house,
           totalPoints: dbTeam.totalPoints || 0,
           isActive: dbTeam.isActive !== false,
+          isEliminated: dbTeam.isEliminated === true, // Map eliminated status
           score: 0, // Reset round score input on fetch
         }));
-        
-        // Sort teams for a consistent view
-        filledTeams.sort((a, b) => {
-            if (a.house < b.house) return -1;
-            if (a.house > b.house) return 1;
-            return a.name.localeCompare(b.name);
+
+        // Sort teams for a consistent view (e.g., alphabetically by name)
+        filledTeams.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Merge with previous state to preserve in-progress scores
+        setTeams(prev => {
+            const prevScoreMap = new Map(prev.map(t => [t._id, t.score] as [string, number]));
+            return filledTeams.map(t => ({...t, score: prevScoreMap.get(t._id) ?? t.score}));
         });
 
-        setTeams(filledTeams);
       } else {
-        setTeams([]);
+         console.warn("Received unexpected data format from /api/admin/teams or no teams found.");
+         setTeams([]); // Set empty if data is not as expected
       }
 
     } catch (err) {
       console.error('Error fetching data:', err);
-      setMessage('Error loading round data.');
+      // Check if err is an instance of Error before accessing message
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred.';
+      setMessage(`Error loading round data: ${errorMessage}`);
     } finally {
-      setLoading(false);
+      // Set loading false only after initial fetch attempt
+       setLoading(false);
     }
-     // Clear message after a delay
-    setTimeout(() => setMessage(''), 3000);
-  }, []); 
+     // Clear non-error message after a delay
+    if (!message.startsWith('Error')) {
+      setTimeout(() => setMessage(''), 3000);
+    }
+  }, [loading, message, teams.length]); // Dependencies for initial load and message clearing
 
   // Initial fetch and polling setup
   useEffect(() => {
     fetchData(); // Initial fetch
 
-    // Polling for lock status (and full data to reflect totalPoints changes)
+    // Polling interval
     const interval = setInterval(() => {
-      if(isMounted) fetchData();
-    }, 7000); 
+      if(isMounted) {
+          // Poll only lock status and winner to avoid overwriting input frequently
+          const pollStatusAndWinner = async () => {
+              try {
+                  const [statusRes, historicalRes] = await Promise.all([
+                      fetch('/api/admin/round-status?round=round-7'),
+                      fetch('/api/rounds/round-7')
+                  ]);
+                  if (statusRes.ok) {
+                      const statusData = await statusRes.json();
+                      setRoundLocked(statusData.isLocked);
+                  }
+                  if (historicalRes.ok) {
+                      const historicalData = await historicalRes.json();
+                      setRoundWinner(historicalData.round?.quaffleWinnerHouse || null);
+                  }
+              } catch (pollErr) {
+                  console.error("Polling error:", pollErr);
+              }
+          };
+          pollStatusAndWinner();
+      }
+    }, 7000);
 
     return () => clearInterval(interval); // Cleanup interval on unmount
-  }, [fetchData, isMounted]); 
+  }, [fetchData, isMounted]); // Include fetchData for initial load
 
-  // Handle changes in the score input
+  // Handle changes in the score input (allows negative scores)
   const handleChange = (
-    id: number, 
+    id: number,
     value: string | number
   ) => {
     if (roundLocked) return;
+    const scoreValue = Number(value) || 0; // Treat empty or invalid input as 0
     setTeams(prev =>
       prev.map(team =>
-        team.id === id ? { ...team, score: Number(value) } : team
+        team.id === id ? { ...team, score: scoreValue } : team
       )
     );
   };
@@ -122,114 +168,124 @@ export default function Round7() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ round: 'round-7', isLocked: !roundLocked }), // Specify round-7
       });
+      if (!res.ok) throw new Error('Failed to update lock status');
       const data = await res.json();
       setRoundLocked(data.isLocked);
       setMessage(`Round ${data.isLocked ? 'locked' : 'unlocked'}.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error toggling lock:', err);
-      setMessage('Error updating lock status.');
+      setMessage(`Error: ${err.message}`);
     }
      setTimeout(() => setMessage(''), 3000);
   };
 
-  // Save the scores entered in this round (adds points to totalPoints)
-  const saveScores = async () => {
+
+ // *** COMBINED SAVE AND SUBMIT FUNCTION (like round-6) ***
+ const saveAndSubmitScores = async () => {
     if (roundLocked) {
       setMessage('Round is locked. Cannot save scores.');
        setTimeout(() => setMessage(''), 3000);
       return;
     }
+     if (!confirm('Are you sure you want to save these points and finalize Round 7? This action saves the entered points to team totals and logs the round result.')) {
+        return;
+    }
     setSubmissionStatus('submitting');
-    try {
-       // Filter teams that actually have a score entered for this round
-      const teamsToUpdate = teams
-       .filter(t => t.score !== 0 && t._id) // Only send teams with scores > 0 and a database ID
-       .map(t => ({
-          _id: t._id,
-          name: t.name, 
-          house: t.house, 
-          score: t.score, // Send only the score TO ADD for this round
-        }));
+    setMessage('Processing: Saving points and finalizing Round 7...');
 
-      if (teamsToUpdate.length === 0) {
-        setMessage('No new scores entered to save.');
-        setSubmissionStatus('idle');
+    let savedTeamData: any = null; // To store result from the first API call
+
+    try {
+       // --- Step 1: Save Scores (Increment totalPoints via /api/admin/teams) ---
+       const teamsToUpdate = teams
+         // Send teams even if score is 0 or negative, as the API handles $inc
+         .filter(t => t._id)
+         .map(t => ({
+            _id: t._id,
+            name: t.name,
+            house: t.house,
+            score: t.score, // Send the incremental score for $inc
+            currentRoundScore: t.score, // Keep track for Step 2 logging
+          }));
+
+       if (teamsToUpdate.length === 0) {
+         setMessage('No teams found to process.');
+         setSubmissionStatus('idle');
          setTimeout(() => setMessage(''), 3000);
-        return;
-      }
-      
-      const res = await fetch('/api/admin/teams', { // This endpoint handles point increment
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teamsToUpdate),
-      });
+         return;
+       }
+       // Check if at least one team has a non-zero score to save/submit
+       const hasScoresToSave = teamsToUpdate.some(t => t.score !== 0);
+        if (!hasScoresToSave) {
+          setMessage('No new points (positive or negative) entered to save.');
+          setSubmissionStatus('idle');
+          setTimeout(() => setMessage(''), 3000);
+          return;
+        }
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to save scores');
-      }
 
-      setSubmissionStatus('success');
-      setMessage('Scores added successfully! Refreshing data...');
-      // Re-fetch data to reflect updated totalPoints and reset round scores
-      await fetchData(); 
+       const token = localStorage.getItem('token');
+       const headers: any = { 'Content-Type': 'application/json' };
+       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    } catch (err: any) {
-      console.error('Error saving scores:', err);
-      setMessage(`Error: ${err.message || 'Could not save scores.'}`);
-      setSubmissionStatus('error');
-    } finally {
-      setTimeout(() => setSubmissionStatus('idle'), 2000);
-    }
-  };
-  
-  // Submit Round Results (logs this round's scores to a separate Round model)
-   const submitRoundResults = async () => {
-    if (roundLocked) {
-        setMessage("Round is locked. Cannot submit results.");
-        setTimeout(() => setMessage(''), 3000);
-        return;
-    }
-    if (!confirm('Are you sure you want to finalize and submit these scores for Round 7? This is typically done only once.')) {
-        return;
-    }
-    setSubmissionStatus('submitting'); 
-    try {
-        // Prepare results from the current local state
-        const results: RoundResult[] = teams
-            .filter((t: any) => t._id && t.name && t.name.trim() !== '') // Filter valid teams with DB ID
-            .map((t: any, idx: number) => ({
-                team: t._id, 
-                points: Number(t.score || 0), // Use the score entered/saved in THIS round's UI
+       const teamSaveRes = await fetch('/api/admin/teams', { // Target TEAMS endpoint
+         method: 'POST',
+         headers,
+         body: JSON.stringify(teamsToUpdate.filter(t => t.score !== 0)), // Only send those with actual score changes for increment
+       });
+
+       savedTeamData = await teamSaveRes.json(); // Store response
+
+       if (!teamSaveRes.ok || !savedTeamData.success) { // Check success flag from API
+         throw new Error(savedTeamData.error || 'Failed to apply score adjustment.');
+       }
+
+       setMessage('Points saved to totals. Now finalizing round...'); // Update message
+
+       // --- Step 2: Submit Round Results (Log final state via /api/rounds/round-7) ---
+        const resultsForRoundLog: RoundResult[] = teamsToUpdate
+            .sort((a, b) => b.currentRoundScore - a.currentRoundScore) // Sort by score achieved in *this* round
+            .map((t, idx) => ({
+                team: t._id,
+                points: t.currentRoundScore, // Log the score achieved in this round
                 time: 0, // Placeholder
-                rank: idx + 1, // Placeholder rank
+                rank: idx + 1, // Rank based on this round's score
             }));
 
-        const token = localStorage.getItem('token');
-        const headers: any = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const res = await fetch('/api/rounds/round-7', { // Endpoint for Round 7 results
+        const submitRes = await fetch('/api/rounds/round-7', { // Target ROUNDS endpoint
             method: 'POST',
             headers,
-            body: JSON.stringify({ results, approved: true }), 
+            body: JSON.stringify({ results: resultsForRoundLog, approved: true }), // Mark as approved/final
         });
 
-        const data = await res.json();
-        if (data.success) {
-            setMessage('Round 7 results submitted successfully! Scores are finalized.');
-            setSubmissionStatus('success');
-        } else {
-            throw new Error(data.error || 'Failed to submit round results');
+        if (!submitRes.ok) {
+            const errorData = await submitRes.json();
+            throw new Error(errorData.error || 'Failed to submit round results after saving scores.');
         }
+
+        setSubmissionStatus('success');
+        setMessage('Points saved and Round 7 submission finalized!');
+
+        // Refresh data AFTER both steps are successful
+        await fetchData();
+
     } catch (err: any) {
-        console.error('submitRoundResults error:', err);
-        setMessage(`Error submitting results: ${err.message}`);
-        setSubmissionStatus('error');
+      console.error('Error in combined save/submit:', err);
+      // More specific error message if score saving worked but submission failed
+      if (savedTeamData?.success) {
+           setMessage(`Error finalizing round after saving scores: ${err.message || 'Could not submit round results.'}`);
+      } else {
+           setMessage(`Error saving points: ${err.message || 'Could not save scores.'}`);
+      }
+      setSubmissionStatus('error');
     } finally {
-        setTimeout(() => setSubmissionStatus('idle'), 3000); 
+      // Reset status after a delay
+      setTimeout(() => setSubmissionStatus('idle'), 3000);
+      // Keep final message longer
+      setTimeout(() => setMessage(''), 5000);
     }
-};
+  };
+
 
   // Helper to award quaffle
   async function awardQua(house:string){
@@ -238,21 +294,67 @@ export default function Round7() {
         setTimeout(() => setMessage(''), 3000);
         return;
     }
+     // Prevent awarding if someone already won
+    if (roundWinner) {
+        setMessage(`Cannot award: ${roundWinner} has already won. Revert first if needed.`);
+        setTimeout(() => setMessage(''), 4000);
+        return;
+    }
+    setMessage(`Awarding quaffle to ${house}...`);
     try{
       const token = localStorage.getItem('token');
       const res = await fetch('/api/admin/award-quaffle',{
           method:'POST',
           headers:{'Content-Type':'application/json', 'Authorization': token ? `Bearer ${token}` : ''},
-          body:JSON.stringify({house,round:'round-7'})
+          body:JSON.stringify({house,round:'round-7'}) // Specify round-7
       })
       if(!res.ok) throw new Error('Failed to award quaffle');
+
+      setRoundWinner(house); // Optimistic UI update
       setMessage('Quaffle awarded to '+house + '!');
-    }catch(e){
-        console.error(e); 
-        setMessage('Failed to award quaffle.');
+
+    }catch(e: any){ // Added type annotation
+        console.error(e);
+        setMessage(`Failed to award quaffle: ${e.message}`); // Show error message
     }
     setTimeout(() => setMessage(''), 3000);
   }
+
+  // *** ADDED: Helper to revert quaffle (like round-6) ***
+  const revertQua = async (house: string, roundId = 'round-7') => { // Default to round-7
+      if (roundLocked) {
+        setMessage('Round is locked. Cannot revert quaffle.');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+      if (!confirm(`WARNING: Are you sure you want to REVERT the Quaffle from ${house} for Round 7? This will decrement their quaffle count.`)) {
+          return;
+      }
+      setMessage(`Reverting Quaffle from ${house}...`);
+      setSubmissionStatus('submitting'); // Reuse submissionStatus to disable buttons
+
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/admin/revert-quaffle', { // Call revert API
+            method: 'POST',
+            headers:{'Content-Type':'application/json', 'Authorization': token ? `Bearer ${token}` : ''},
+            body: JSON.stringify({ house, round: roundId }) // Send correct round ID
+        });
+        if (!res.ok) {
+           const errorData = await res.json();
+           throw new Error(errorData.error || 'Failed to revert. Check server logs.');
+        }
+        setRoundWinner(null); // Clear winner in UI state
+        setMessage(`Quaffle successfully REVERTED from ${house}!`);
+      } catch (e: any) {
+          console.error('Revert failed:', e);
+          setMessage(`Revert failed: ${e.message}.`);
+      } finally {
+        setSubmissionStatus('idle'); // Reset submission status
+        setTimeout(() => setMessage(''), 5000); // Clear message after 5s
+      }
+  }
+
 
   if (loading) {
     return (
@@ -280,7 +382,7 @@ export default function Round7() {
             {roundLocked ? '🔒 Round Locked - Unlock to Edit' : '🔓 Round Unlocked - Lock to Prevent Edits'}
           </button>
            {message && (
-             <p className={`mt-4 text-center font-semibold ${submissionStatus === 'error' ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
+             <p className={`mt-4 text-center font-semibold ${submissionStatus === 'error' || message.startsWith('Error') || message.startsWith('Failed') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
           )}
         </header>
 
@@ -295,7 +397,7 @@ export default function Round7() {
                     <th className="p-3">Team Name</th>
                     <th className="p-3">House</th>
                     <th className="p-3">Current Total Points</th>
-                    <th className="p-3">Points to Add (Round 7)</th>
+                    <th className="p-3">Points to Add/Subtract (Round 7)</th>
                     <th className="p-3">Status</th>
                   </tr>
                 </thead>
@@ -310,60 +412,80 @@ export default function Round7() {
                           type="number"
                           value={team.score}
                           onChange={e => handleChange(team.id, e.target.value)}
+                          onWheel={e => e.currentTarget.blur()} // Prevent scroll changing value
                           disabled={roundLocked}
                           className={`w-24 bg-gray-700 border ${roundLocked ? 'border-gray-600' : 'border-amber-900/50'} rounded p-1 text-amber-100 text-right focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-70 disabled:cursor-not-allowed`}
                            placeholder="0"
+                           // Removed min="0" to allow negative increments
                         />
                       </td>
                        <td className="p-3">
-                         <span className={`px-2 py-1 rounded text-xs font-medium ${team.isActive ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-                          {team.isActive ? 'Active' : 'Inactive'}
+                         <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            team.isEliminated ? 'bg-red-900/70 text-red-200' :
+                            team.isActive ? 'bg-green-900/50 text-green-300' :
+                            'bg-gray-600/50 text-gray-300'
+                          }`}>
+                            {team.isEliminated ? 'Eliminated' : team.isActive ? 'Active' : 'Inactive'}
                          </span>
                       </td>
                     </tr>
                   ))}
+                   {teams.length === 0 && (
+                     <tr><td colSpan={5} className="p-4 text-center text-amber-200/70 italic">No active, non-eliminated teams found.</td></tr>
+                   )}
                 </tbody>
               </table>
             </div>
-             {/* Save Button */}
+             {/* *** UPDATED SAVE BUTTON *** */}
             {!roundLocked && (
               <div className="text-center mt-6">
                  <button
-                    onClick={saveScores}
+                    onClick={saveAndSubmitScores} // Use the combined function
                     disabled={submissionStatus === 'submitting' || roundLocked}
-                    className="bg-gradient-to-r from-amber-700 to-amber-900 text-amber-100 font-bold py-2 px-6 rounded-lg border border-amber-400/30 hover:from-amber-800 hover:to-amber-950 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="bg-gradient-to-r from-purple-700 to-indigo-900 text-indigo-100 font-bold py-3 px-8 rounded-lg border border-indigo-400/30 hover:from-purple-800 hover:to-indigo-950 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                   {submissionStatus === 'submitting' ? 'Saving...' : submissionStatus === 'success' ? 'Saved!' : submissionStatus === 'error' ? 'Error!' : '💾 Save Added Points'}
+                   {submissionStatus === 'submitting' ? 'Processing...' : '✅ Save Points & Finalize Round 7'}
                  </button>
-                 {/* Optional Submit Button (if needed to log final round data) */}
-                 <button
-                    onClick={submitRoundResults}
-                    disabled={submissionStatus === 'submitting' || roundLocked}
-                    className="ml-4 bg-gradient-to-r from-blue-700 to-blue-900 text-blue-100 font-bold py-2 px-6 rounded-lg border border-blue-400/30 hover:from-blue-800 hover:to-blue-950 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                 >
-                    {submissionStatus === 'submitting' ? 'Submitting...' : '🚀 Submit Final Round 7 Scores'}
-                 </button>
+                 <p className="text-sm text-indigo-300/70 mt-2 italic">Updates totals and logs final round results.</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Award Quaffle (Updated with 4 houses) */}
+        {/* Award/Revert Quaffle Section */}
         <div className="mt-8 text-center bg-gray-800 rounded-lg shadow-xl p-4 md:p-6 border border-amber-800/50">
-          <p className="text-amber-200 mb-3 text-lg">Award Round 7 Winner Quaffle (Finals):</p>
-          <div className="flex justify-center gap-4 flex-wrap">
-            {houses.map(h => (
+          <h2 className="text-2xl text-amber-300 mb-4 font-semibold">Manage Round 7 Quaffle</h2>
+          {roundWinner ? (
+            // *** ADDED REVERT BUTTON LOGIC ***
+            <div className="text-center">
+              <p className="text-2xl font-bold text-yellow-400 mb-4">🏆 Current Winner: {roundWinner} 🏆</p>
               <button
-                key={h}
-                onClick={() => awardQua(h)}
-                disabled={roundLocked}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-md text-white font-semibold transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => revertQua(roundWinner)}
+                disabled={roundLocked || submissionStatus === 'submitting'}
+                className="px-6 py-2 bg-red-800 hover:bg-red-700 rounded-md text-white font-semibold transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Award {h}
+                Revert Quaffle from {roundWinner}
               </button>
-            ))}
-          </div>
-           {roundLocked && <p className="text-red-400 text-sm mt-4 italic">(Unlock the round to award Quaffles)</p>}
+            </div>
+          ) : (
+            // Original Award buttons
+            <>
+              <p className="text-amber-200 mb-3 text-lg">Award Round 7 Winner Quaffle (Finals):</p>
+              <div className="flex justify-center gap-4 flex-wrap">
+                {houses.map(h => (
+                  <button
+                    key={h}
+                    onClick={() => awardQua(h)}
+                    disabled={roundLocked || !!roundWinner || submissionStatus === 'submitting'} // Also disable if winner exists or submitting
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-md text-white font-semibold transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Award {h}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+           {roundLocked && <p className="text-red-400 text-sm mt-4 italic">(Unlock the round to award or revert Quaffles)</p>}
         </div>
       </div>
     </div>

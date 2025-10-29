@@ -1,6 +1,8 @@
+// src/app/admin/rounds/round-5/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+// Note: Removed unused Recharts imports if they were present
 
 // Define the Team interface
 interface Team {
@@ -14,7 +16,7 @@ interface Team {
 }
 
 export default function Round5AdminPage() {
-  const houses = ['Gryffindor', 'Hufflepuff', 'Ravenclaw', 'Slytherin'];
+  const houses = ['Gryffindor', 'Hufflepuff', 'Ravenclaw', 'Slytherin']; // Include Slytherin
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [roundLocked, setRoundLocked] = useState(true);
@@ -22,12 +24,13 @@ export default function Round5AdminPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState(''); // For general messages
+  const [roundWinner, setRoundWinner] = useState<string | null>(null); // <<< ADDED State for Quaffle winner
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Fetch initial data (lock status, teams)
+  // Fetch initial data (lock status, teams, winner)
   const fetchData = useCallback(async () => {
     // Only set loading on initial fetch or if already loading
     if (loading || !teams.length) {
@@ -35,19 +38,30 @@ export default function Round5AdminPage() {
     }
     try {
       // Fetch round lock status
-      const statusRes = await fetch('/api/admin/round-status?round=round-5'); //
+      const statusRes = await fetch('/api/admin/round-status?round=round-5');
       const statusData = await statusRes.json();
       setRoundLocked(statusData.isLocked);
 
-      // Fetch teams
-      const teamsRes = await fetch('/api/admin/teams'); //
-      const teamsData = await teamsRes.json();
+      // --- ADDED: Fetch current round winner status ---
+      const roundDetailsRes = await fetch('/api/rounds/round-5'); // Fetch round details
+      const roundDetailsData = await roundDetailsRes.json();
+      if (roundDetailsRes.ok && roundDetailsData.round) {
+        setRoundWinner(roundDetailsData.round.quaffleWinnerHouse || null); // Update winner state
+      } else {
+         console.warn('Could not fetch round 5 details or winner.');
+         setRoundWinner(null);
+      }
+      // --- END ADDED ---
 
-      if (teamsData && Array.isArray(teamsData)) {
+      // Fetch teams
+      const teamsRes = await fetch('/api/admin/teams');
+      const teamsData = await teamsRes.json(); // Expecting array directly
+
+      if (teamsData && Array.isArray(teamsData)) { // Check if it's an array
         const fetchedTeams = teamsData
           .filter((t: any) => t.isActive !== false && t.isEliminated !== true) // Filter for active, non-eliminated
-          .map((dbTeam: any, index: number) => ({
-            id: index + 1,
+          .map((dbTeam: any, index: number): Team => ({ // Added Team return type
+            id: index + 1, // Re-assign sequential ID after filtering
             _id: dbTeam._id,
             name: dbTeam.name,
             house: dbTeam.house,
@@ -55,48 +69,68 @@ export default function Round5AdminPage() {
             isActive: dbTeam.isActive !== false,
             isEliminated: dbTeam.isEliminated === true,
           }));
-        // Sort for consistent display
-        fetchedTeams.sort((a,b)=> a.name.localeCompare(b.name));
+        // Sort for consistent display (by house, then name)
+        fetchedTeams.sort((a,b)=> {
+            if (a.house < b.house) return -1;
+            if (a.house > b.house) return 1;
+            return a.name.localeCompare(b.name);
+        });
         setTeams(fetchedTeams);
       } else {
+        console.warn("Unexpected data format from /api/admin/teams or no teams found.");
         setTeams([]);
       }
 
     } catch (err) {
       console.error('Error fetching data:', err);
-      setMessage('Error loading round data.');
+      // More specific error message if possible
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred.';
+      setMessage(`Error loading round data: ${errorMessage}`);
       setTimeout(() => setMessage(''), 3000);
     } finally {
-      // Set loading false only after initial fetch
-      if (loading || !teams.length) {
-        setLoading(false);
-      }
+      // Set loading false only after initial fetch attempt
+      setLoading(false);
     }
-  }, [loading, teams.length]); // Depend on loading and teams.length
+  // Removed loading and teams.length dependencies to rely on initial fetch logic
+  }, []);
 
 
-  // Fetch data on mount and poll lock status
+  // Fetch data on mount and poll lock status/winner
   useEffect(() => {
+    let isSubscribed = true;
+    let pollInterval: NodeJS.Timeout | null = null;
+
     fetchData(); // Initial full fetch
 
-    const interval = setInterval(async () => {
+    // Polling interval for lock status and winner
+    pollInterval = setInterval(async () => {
+      if (!isSubscribed) return;
       try {
-        const res = await fetch('/api/admin/round-status?round=round-5'); //
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted) {
-          setRoundLocked(data.isLocked);
+        const [statusRes, detailsRes] = await Promise.all([
+             fetch('/api/admin/round-status?round=round-5'),
+             fetch('/api/rounds/round-5')
+        ]);
+
+        if (isSubscribed) {
+            if (statusRes.ok) {
+                 const statusData = await statusRes.json();
+                 setRoundLocked(statusData.isLocked);
+            }
+            if (detailsRes.ok) {
+                const detailsData = await detailsRes.json();
+                setRoundWinner(detailsData.round?.quaffleWinnerHouse || null);
+            }
         }
       } catch (err) {
-        console.error('Error polling lock status:', err);
+        console.error('Error polling status/winner:', err);
       }
-    }, 7000);
+    }, 7000); // Poll every 7 seconds
 
     return () => {
-      setIsMounted(false);
-      clearInterval(interval);
+      isSubscribed = false;
+      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [fetchData, isMounted]);
+  }, [fetchData]); // Re-run if fetchData changes (it shouldn't due to useCallback)
 
 
   const handleHouseChange = ( teamId: string, newHouse: string ) => {
@@ -139,51 +173,40 @@ export default function Round5AdminPage() {
     setMessage('Saving team changes...');
 
     const teamsToUpdate = teams
-      .filter(t => t._id)
+      .filter(t => t._id) // Ensure team has an ID
       .map(t => ({
         _id: t._id,
-        name: t.name,
-        house: t.house,
-        isActive: t.isActive,
+        name: t.name, // Include name (API might require it)
+        house: t.house, // Send the potentially updated house
+        // Include isActive only if your API expects/handles it during updates
+        // isActive: t.isActive,
       }));
 
     try {
-      const res = await fetch('/api/admin/teams', { //
+      const token = localStorage.getItem('token'); // Get token for auth
+      const res = await fetch('/api/admin/teams', { // Use the admin teams endpoint
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }, // Add Auth header if needed
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` // Include Auth header
+        },
         body: JSON.stringify(teamsToUpdate),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to save team changes');
+      const data = await res.json(); // Always parse response
+
+      if (!res.ok || !data.success) { // Check API success flag
+        if(res.status === 403){ throw new Error(data.error || 'Permission Denied. Contact Admin.'); }
+        throw new Error(data.error || 'Failed to save team changes');
       }
 
-       const data = await res.json();
-       if (data.teams && Array.isArray(data.teams)) {
-          let updatedTeamsFromApi = data.teams // Use let to allow modification
-             .filter((dbTeam: any) => dbTeam.isActive !== false && dbTeam.isEliminated !== true) // Ensure we only show active ones
-             .map((dbTeam: any, index: number): Team => ({ // Explicit return type here helps
-                id: index + 1, // Re-assign sequential ID after filtering
-                _id: dbTeam._id,
-                name: dbTeam.name,
-                house: dbTeam.house,
-                totalPoints: dbTeam.totalPoints || 0,
-                isActive: dbTeam.isActive !== false,
-                isEliminated: dbTeam.isEliminated === true,
-            }));
-
-            // FIX: Add explicit types for sort parameters
-            updatedTeamsFromApi.sort((a: Team, b: Team) => a.name.localeCompare(b.name));
-
-          setTeams(updatedTeamsFromApi); // Set the sorted array
-      } else {
-        console.warn("Unexpected API response structure for team update.");
-        await fetchData(); // Refetch data as a fallback
-      }
+       // Optionally, update local state directly from response if needed, otherwise rely on polling
+       // if (data.teams && Array.isArray(data.teams)) { ... update logic ... }
+       // For simplicity here, we'll rely on the next poll or manual refresh
 
       setSubmissionStatus('success');
       setMessage('Team changes saved successfully!');
+      await fetchData(); // Explicitly refresh data after save
 
     } catch (err: any) {
       console.error('Error saving team changes:', err);
@@ -191,7 +214,8 @@ export default function Round5AdminPage() {
       setSubmissionStatus('error');
     } finally {
       setTimeout(() => setSubmissionStatus('idle'), 2000);
-      setTimeout(() => setMessage(''), 3000);
+      // Keep success/error message slightly longer
+      setTimeout(() => setMessage(''), 4000);
     }
   };
 
@@ -222,25 +246,28 @@ export default function Round5AdminPage() {
         }));
 
         // POST to the specific round API endpoint
-        const res = await fetch('/api/rounds/round-5', { // Target round-5 API/route.ts]
+        const res = await fetch('/api/rounds/round-5', { // Target round-5 API
             method: 'POST',
             headers,
             body: JSON.stringify({
                 results: resultsPayload,
-                approved: true // Optionally lock the round automatically upon finalization
+                approved: true // Mark as approved (potentially locks the round via API logic if needed)
             }),
         });
 
         const data = await res.json();
         if (!res.ok || !data.success) {
+            if(res.status === 403){ throw new Error(data.error || 'Permission Denied. Contact Admin.'); }
             throw new Error(data.error || 'Failed to finalize Round 5 setup.');
         }
 
         setSubmissionStatus('success');
         setMessage('Round 5 setup finalized successfully! Leaderboard structure created.');
-         if(data.round?.isLocked) {
-            setRoundLocked(true); // Update lock status if API locked it
+         if(data.round?.isLocked) { // Check if API response indicates it locked the round
+            setRoundLocked(true);
          }
+         // Optionally refresh data if finalization changes anything displayed
+         // await fetchData();
 
     } catch (err: any) {
         console.error('Error finalizing Round 5:', err);
@@ -252,11 +279,88 @@ export default function Round5AdminPage() {
     }
   };
 
+  // --- ADDED: awardQuaffle function ---
+  const awardQuaffle = async (house: string, roundId = 'round-5') => {
+    if (roundLocked) {
+        setMessage('Round is locked. Cannot award quaffle.');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+    }
+    if (roundWinner) {
+        setMessage(`Cannot award: ${roundWinner} already won. Revert first if needed.`);
+        setTimeout(() => setMessage(''), 4000);
+        return;
+    }
+    setMessage(`Awarding quaffle to ${house}...`);
+    setSubmissionStatus('submitting'); // Disable buttons
+    try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/admin/award-quaffle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
+            body: JSON.stringify({ house: house, round: roundId }) // Send roundId
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            if(res.status === 403){ throw new Error(data.error || 'Permission Denied. Contact Admin.'); }
+            throw new Error(data.error || 'Failed to award quaffle');
+        }
+        setRoundWinner(house); // Update UI
+        setMessage(`Quaffle awarded to ${house}!`);
+        setSubmissionStatus('success');
+    } catch(e: any) {
+        console.error("Award Quaffle Error:", e);
+        setMessage(`Failed to award quaffle: ${e.message}`);
+        setSubmissionStatus('error');
+    } finally {
+        setTimeout(() => setSubmissionStatus('idle'), 3000);
+        setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // --- ADDED: revertQuaffle function ---
+  const revertQuaffle = async (house: string, roundId = 'round-5') => {
+      if (roundLocked) {
+        setMessage('Round is locked. Cannot revert quaffle.');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+      if (!confirm(`WARNING: Are you sure you want to REVERT the Quaffle from ${house} for Round 5? This will decrement their quaffle count.`)) {
+          return;
+      }
+      setMessage(`Reverting Quaffle from ${house}...`);
+      setSubmissionStatus('submitting'); // Disable buttons
+
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/admin/revert-quaffle', { // Call revert API
+            method: 'POST',
+            headers:{'Content-Type':'application/json', 'Authorization': token ? `Bearer ${token}` : ''},
+            body: JSON.stringify({ house, round: roundId }) // Send correct round ID
+        });
+        const data = await res.json();
+        if (!res.ok) {
+           if(res.status === 403){ throw new Error(data.error || 'Permission Denied. Contact Admin.'); }
+           throw new Error(data.error || 'Failed to revert. Check server logs.');
+        }
+        setRoundWinner(null); // Clear winner in UI state
+        setMessage(`Quaffle successfully REVERTED from ${house}!`);
+        setSubmissionStatus('success');
+      } catch (e: any) {
+          console.error('Revert failed:', e);
+          setMessage(`Revert failed: ${e.message}.`);
+          setSubmissionStatus('error');
+      } finally {
+        setTimeout(() => setSubmissionStatus('idle'), 3000);
+        setTimeout(() => setMessage(''), 5000);
+      }
+  };
+
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-400 text-2xl">
-        Loading Round 5 Data...
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-400 text-2xl animate-pulse">
+        Loading Round 5 Data... ⏳
       </div>
     );
   }
@@ -264,10 +368,12 @@ export default function Round5AdminPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-100 p-6 font-[Cinzel]">
       <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4 text-amber-400">Round 5: House Management</h1>
-          <p className="text-lg text-amber-200 mb-4">Manage round lock status and adjust team houses. Finalize setup to create the leaderboard entry.</p>
+          <h1 className="text-4xl font-bold mb-4 text-amber-400">Round 5: House Management (Admin)</h1>
+          <p className="text-lg text-amber-200 mb-4">Manage lock status, adjust houses, award/revert Quaffle, and finalize setup.</p>
           <div className="flex justify-center items-center gap-4 flex-wrap">
+              {/* Lock Button */}
               <button
                 onClick={toggleLock}
                 className={`px-6 py-3 rounded-lg text-lg font-semibold transition-colors duration-300 ${
@@ -278,6 +384,7 @@ export default function Round5AdminPage() {
               >
                 {roundLocked ? '🔓 Unlock Round' : '🔒 Lock Round'}
               </button>
+              {/* Finalize Button */}
                {!roundLocked && (
                   <button
                     onClick={finalizeRound5Setup}
@@ -288,16 +395,32 @@ export default function Round5AdminPage() {
                   </button>
                )}
           </div>
+          {/* Message Display */}
           {message && (
-            <p className={`mt-5 text-center font-semibold text-lg ${message.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
+            <p className={`mt-5 text-center font-semibold text-lg ${
+                message.startsWith('Error') || message.startsWith('Failed') || message.startsWith('Cannot award')
+                ? 'text-red-400'
+                : message.includes('successfully') || message.includes('awarded') || message.includes('REVERTED')
+                ? 'text-green-400'
+                : 'text-blue-400' // For info messages like 'Saving...'
+            }`}>{message}</p>
           )}
         </header>
 
+         {/* Lock Warning */}
+         {roundLocked && (
+            <div className="p-4 mb-6 rounded text-center bg-red-900/50 border border-red-700 text-red-300">
+                The round is currently locked. Unlock to make changes or award Quaffles.
+            </div>
+         )}
+
+        {/* Team Management Table */}
         {!loading && (
           <div className="bg-gray-800 rounded-lg shadow-xl p-4 md:p-6 border border-amber-800/50 mb-8">
             <h2 className="text-2xl text-amber-300 mb-4 font-semibold">Manage Team Houses</h2>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px] text-left">
+                {/* ... (table thead remains the same) ... */}
                 <thead>
                   <tr className="border-b border-amber-900/30 text-amber-400">
                     <th className="p-3">Team Name</th>
@@ -336,17 +459,14 @@ export default function Round5AdminPage() {
                     </tr>
                   ))}
                   {teams.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="p-4 text-center text-amber-200/70 italic">
-                        No active, non-eliminated teams found for Round 5.
-                      </td>
-                    </tr>
+                    <tr><td colSpan={4} className="p-4 text-center text-amber-200/70 italic">No active, non-eliminated teams found.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+            {/* Save Button */}
             {!roundLocked && (
-              <div className="text-center mt-6 flex justify-center gap-4 flex-wrap">
+              <div className="text-center mt-6">
                 <button
                   onClick={saveTeamChanges}
                   disabled={submissionStatus === 'submitting' || roundLocked}
@@ -356,9 +476,45 @@ export default function Round5AdminPage() {
                 </button>
               </div>
             )}
-             {roundLocked && <p className="text-red-400 text-sm mt-4 italic text-center">(Unlock the round to change houses)</p>}
           </div>
         )}
+
+         {/* --- ADDED: Quaffle Management Section --- */}
+         <div className="mb-8 p-6 bg-gray-800 rounded-2xl shadow-lg border-2 border-amber-900/30 text-center">
+             <h2 className="text-2xl font-['Cinzel'] text-amber-400 mb-4">Manage Round 5 Quaffle</h2>
+             {roundWinner ? (
+                // Show current winner and Revert button
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-yellow-400 mb-4">🏆 Current Winner: {roundWinner} 🏆</p>
+                  <button
+                    onClick={() => revertQuaffle(roundWinner)}
+                    disabled={roundLocked || submissionStatus === 'submitting'}
+                    className="px-6 py-2 bg-red-800 hover:bg-red-700 rounded-md text-white font-semibold transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Revert Quaffle from {roundWinner}
+                  </button>
+                </div>
+              ) : (
+                 // Show Award buttons
+                 <>
+                    <p className="text-amber-200 mb-4 text-xl">Select the house winner for Round 5:</p>
+                    <div className="flex justify-center gap-4 flex-wrap">
+                      {houses.map(h=> // Use all houses
+                        <button
+                          key={h}
+                          onClick={()=>awardQuaffle(h)}
+                          disabled={roundLocked || !!roundWinner || submissionStatus === 'submitting'}
+                          className="px-4 py-2 bg-amber-700 rounded text-white font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Give {h} Quaffle
+                        </button>
+                      )}
+                    </div>
+                 </>
+              )}
+             {roundLocked && <p className="text-red-400 text-sm mt-4 italic">(Unlock round to award or revert Quaffles)</p>}
+         </div>
+         {/* --- END ADDED --- */}
 
       </div>
     </div>
