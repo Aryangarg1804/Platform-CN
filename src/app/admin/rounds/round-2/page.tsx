@@ -92,7 +92,7 @@ export default function Round2() {
     try {
       const [statusRes, allTeamsRes, potionsRes, savedPairsRes] = await Promise.all([
         fetch('/api/admin/round-status?round=round-2'),
-        fetch('/api/admin/teams?round=2'), // Fetch teams participating in round 2
+        fetch('/api/admin/teams'), // Fetch teams participating in round 2
         fetch('/api/admin/potions'),
         fetch('/api/rounds/round-2') // Fetch saved pair results
       ]);
