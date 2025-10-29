@@ -466,35 +466,33 @@ export default function HomePage() {
             </div>
 
             {/* --- Start Trial Button with Decorative Elements --- */}
-            <div className="relative w-full max-w-[80%] sm:max-w-[60%] md:max-w-[50%] mx-auto flex justify-center items-center mt-2 sm:mt-4">
-              {/* Left Line */}
-              <div className="absolute left-0 w-[20%] sm:w-1/4 flex items-center">
-                <div className="h-[1px] sm:h-[2px] flex-grow bg-gradient-to-r from-transparent to-amber-400"></div>
+            <div className="relative w-full flex justify-center items-center mt-2 sm:mt-4">
+              {/* Left Line - Hidden on mobile */}
+              <div className="absolute left-0 w-1/3 hidden sm:flex items-center">
+                <div className="h-[2px] flex-grow bg-gradient-to-r from-transparent to-amber-400"></div>
               </div>
 
-              {/* Right Line */}
-              <div className="absolute right-0 w-[20%] sm:w-1/4 flex items-center">
-                <div className="h-[1px] sm:h-[2px] flex-grow bg-gradient-to-l from-transparent to-amber-400"></div>
+              {/* Right Line - Hidden on mobile */}
+              <div className="absolute right-0 w-1/3 hidden sm:flex items-center">
+                <div className="h-[2px] flex-grow bg-gradient-to-l from-transparent to-amber-400"></div>
               </div>
 
               {/* Button Container */}
-              <div className="relative mx-2 sm:mx-4">
-                {/* Outer Border */}
-                <div className="absolute inset-0 border border-amber-400 sm:border-2 rounded-md"></div>
+              <div className="relative">
                 {/* Button */}
                 <motion.button
                   onClick={() => window.location.href = '/public'}
-                  className="font-magic px-4 sm:px-8 md:px-12 py-2 sm:py-3 
-                            bg-transparent text-white text-sm sm:text-lg md:text-xl 
+                  className="font-magic px-6 sm:px-12 md:px-16 py-2 sm:py-3 md:py-4 
+                            bg-transparent text-white text-base sm:text-xl md:text-2xl 
                             rounded-md relative z-10 
-                            border border-amber-400
+                            border-2 border-amber-400
                             uppercase tracking-wider overflow-hidden
-                            whitespace-nowrap"
+                            scale-75 sm:scale-100"
                   initial="initial"
                   animate="animate"
                 >
                   <motion.span
-                    className="block"
+                    className="block whitespace-nowrap"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ 
