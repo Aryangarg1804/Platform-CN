@@ -547,7 +547,7 @@ export default function HomePage() {
               
               {/* --- House Leaderboard Link --- */}
               <motion.a
-                href="/house-leaderboard"
+                href="/public/house-leaderboard"
                 className="relative p-6 sm:p-8 bg-[#0c0c0c] border-2 border-amber-800/60 rounded-lg shadow-2xl overflow-hidden cursor-pointer group"
                 style={{
                   background: 'linear-gradient(145deg, #1a1a1a 0%, #0a0a0a 100%)',
@@ -586,7 +586,7 @@ export default function HomePage() {
 
               {/* --- Team Leaderboard Link --- */}
               <motion.a
-                href="/team-leaderboard"
+                href="/public/team-leaderboard"
                 className="relative p-6 sm:p-8 bg-[#0c0c0c] border-2 border-emerald-800/60 rounded-lg shadow-2xl overflow-hidden cursor-pointer group"
                 style={{
                   background: 'linear-gradient(145deg, #1a1a1a 0%, #0a0a0a 100%)',
