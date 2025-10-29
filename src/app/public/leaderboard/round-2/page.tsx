@@ -44,7 +44,7 @@ const getHouseColorClass = (house?: string): string => {
 
 const LeaderboardCard: React.FC<LeaderboardCardProps> = ({ title, items }) => {
   return (
-    <div className="bg-[#1a0f08]/80 rounded-2xl p-6 md:p-8 shadow-[0_0_30px_rgba(255,215,0,0.15)] border-2 border-amber-800/60 backdrop-blur-sm">
+    <div className="bg-[#172854]/80 rounded-2xl p-6 md:p-8 shadow-[0_0_30px_rgba(255,215,0,0.15)] border-2 border-[#172854]/60 backdrop-blur-sm">
       <h3 className="text-2xl md:text-3xl font-bold text-amber-400 mb-6 text-center tracking-wide"
         style={{ textShadow: '0 1px 10px rgba(255, 215, 0, 0.3)' }}>
         {title}
@@ -263,7 +263,7 @@ export default function Round2LeaderboardPage() {
   }).sort((a, b) => a.house.localeCompare(b.house));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#120b05] via-[#1b0f07] to-[#2b1a0e] p-8 md:p-12 font-['Cinzel'] text-amber-100">
+    <div className="min-h-screen bg-gradient-to-br from-[#050811] via-[#182c60] to-[#080b14] p-8 md:p-12 font-['Cinzel'] text-amber-100">
       <div className="max-w-6xl mx-auto">
         <header className="mb-10 md:mb-16 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-3 tracking-wider text-amber-400 drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]">
@@ -306,34 +306,38 @@ export default function Round2LeaderboardPage() {
           )}
         </div>
 
-        <div className="mt-12 bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
-          <h2 className="text-xl font-['Cinzel'] text-amber-400 mb-4 text-center">
-            Overall Score Distribution ({config.scoreLabel})
+        <div className="mt-12 bg-gradient-to-br from-[#0E1A40]/90 to-[#1a2850]/90 rounded-2xl p-6 md:p-8 border-4 border-[#4169E1] backdrop-blur-sm" style={{ boxShadow: '0 0 40px rgba(65, 105, 225, 0.3)' }}>
+          <h2 className="text-2xl md:text-3xl cinzel-font font-bold text-[#ECB939] mb-6 text-center" style={{ textShadow: '0 0 15px #ECB939' }}>
+            Overall Score Distribution
           </h2>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#78350f" strokeOpacity={0.3} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#4169E1" strokeOpacity={0.3} />
                 <XAxis
                   dataKey="name"
                   interval={0}
                   angle={-45}
                   textAnchor="end"
                   height={80}
-                  stroke="#fcd34d"
-                  style={{ fontSize: '12px', fontFamily: 'serif' }}
+                  stroke="#ECB939"
+                  style={{ fontSize: '12px', fontFamily: 'Cinzel, serif' }}
                 />
-                <YAxis stroke="#fcd34d" />
+                <YAxis stroke="#ECB939" style={{ fontFamily: 'Cinzel, serif' }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #78350f',
-                    borderRadius: '4px',
-                    color: '#fcd34d',
+                    backgroundColor: '#0E1A40',
+                    border: '2px solid #ECB939',
+                    borderRadius: '8px',
+                    color: '#ECB939',
+                    fontFamily: 'Cinzel, serif'
                   }}
                 />
-                <Legend />
+                <Legend wrapperStyle={{ fontFamily: 'Cinzel, serif' }} />
                 <Bar dataKey={config.scoreLabel} fill={config.color} name={config.scoreLabel} />
+                {config.subScoreLabel && (
+                  <Bar dataKey={config.subScoreLabel} fill="#4169E1" name={config.subScoreLabel} />
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
