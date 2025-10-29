@@ -3,6 +3,7 @@
 
 import './globals.css'
 import React, { useState } from 'react'
+import Image from 'next/image'
 
 // ❌ REMOVE THE 'export const metadata' BLOCK FROM HERE
 
@@ -20,8 +21,18 @@ export default function ClientRootLayout({ children }: { children: React.ReactNo
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             
             <div className="flex items-center gap-4">
-              <div className="text-2xl font-['Cinzel'] text-amber-300">⚡ Platform 9¾</div>
-              <div className="text-sm text-amber-200 hidden sm:block">Hogwarts Tournament</div>
+<div className="flex items-center gap-2">
+  <Image
+    src="/images/cn_logo.png"
+    alt="Coding Ninja logo"
+    width={48}
+    height={48}
+    className="rounded-full"
+  />
+  <span className="text-2xl font-['Cinzel'] text-amber-300">
+    Platform 9¾
+  </span>
+</div>              <div className="text-sm text-amber-200 hidden sm:block">Hogwarts Tournament</div>
             </div>
 
             <button 
