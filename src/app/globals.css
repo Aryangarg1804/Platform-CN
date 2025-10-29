@@ -1,9 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* Import magical serif font */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&family=Cinzel+Decorative:wght@400;700;900&display=swap');
+/* Import magica font */
+@import url('https://fonts.cdnfonts.com/css/harry-p');
 :root {
   --hp-bg: #0b0f13;
   --hp-card: #0f1720;
@@ -14,14 +13,14 @@
 /* Reset & body */
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Harry P';
   background-color: var(--hp-bg);
   color: white;
   overflow-x: hidden;
 }
 
 .h1-hp {
-  font-family: 'Cinzel', serif;
+  font-family: 'Harry P';
 }
 
 /* Animations */
@@ -217,3 +216,80 @@ body {
   color: var(--hp-muted);
   text-align: center;
 }
+
+
+.header-bg {
+  background: linear-gradient(135deg, #0E1A40 0%, #1a2855 50%, #0E1A40 100%);
+  box-shadow: 0 4px 15px rgba(65, 105, 225, 0.3);
+  border-bottom: 2px solid #ECB939;
+}
+
+.platform-title {
+  font-family: 'Harry P';
+  color: #ECB939;
+  font-size: 1.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 10px rgba(236, 185, 57, 0.4);
+}
+
+.subtitle {
+  color: #D3A625;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nav-link {
+  color: #ECB939;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  transition: all 0.3s ease;
+  position: relative;
+  font-size: 0.875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: #ECB939;
+  transform: translateX(-50%);
+  transition: width 0.3s ease;
+}
+
+.nav-link:hover::after {
+  width: 80%;
+}
+
+.nav-link:hover {
+  color: #D3A625;
+}
+
+.menu-btn {
+  background: none;
+  border: 2px solid #ECB939;
+  color: #ECB939;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.menu-btn:hover {
+  background: rgba(236, 185, 57, 0.1);
+  border-color: #D3A625;
+}
+
+.mobile-menu {
+  background: linear-gradient(180deg, #0E1A40 0%, #1a2855 100%);
+  border: 1px solid #ECB939;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.8);
+}
+
+
