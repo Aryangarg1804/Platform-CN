@@ -1,29 +1,3 @@
-// import React from 'react'
-
-// export function LeaderboardCard({ title, items }: { title: string; items: Array<any> }) {
-//   return (
-//     <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border-2 border-amber-900/30">
-//       <h3 className="text-2xl text-amber-400 mb-4">{title}</h3>
-//       <ol className="list-decimal list-inside space-y-2">
-//         {items.map((it, idx) => (
-//           <li key={idx} className="flex justify-between items-center bg-gray-700 p-2 rounded">
-//             <div>
-//               <div className="font-semibold text-amber-100">{it.name || it.house}</div>
-//               {it.house && <div className="text-sm text-amber-300">{it.house}</div>}
-//             </div>
-//             <div className="text-amber-200 font-mono">{it.score ?? it.totalScore ?? it.quaffles}</div>
-//           </li>
-//         ))}
-//       </ol>
-//     </div>
-//   )
-// }
-
-// export default LeaderboardCard
-
-
-
-
 import React from 'react'
 
 // Define the expected shape of items
@@ -42,57 +16,116 @@ interface LeaderboardCardProps {
   items: LeaderboardItem[];
 }
 
-// Helper to get house color class
+// Helper to get house color class - Platform 9¾ themed
 const getHouseColorClass = (house?: string): string => {
   switch (house?.toLowerCase()) {
-    case 'gryffindor': return 'text-red-400 border-red-600';
-    case 'hufflepuff': return 'text-yellow-400 border-yellow-600';
-    case 'ravenclaw': return 'text-blue-400 border-blue-600';
-    case 'slytherin': return 'text-green-400 border-green-600';
-    default: return 'text-gray-400 border-gray-600';
+    case 'gryffindor': return 'text-[#D3A625] border-[#D3A625]';
+    case 'hufflepuff': return 'text-[#ECB939] border-[#ECB939]';
+    case 'ravenclaw': return 'text-[#4169E1] border-[#4169E1]';
+    case 'slytherin': return 'text-[#AAAAAA] border-[#5D5D5D]';
+    default: return 'text-[#AAAAAA] border-[#5D5D5D]';
   }
 };
 
 export function LeaderboardCard({ title, items }: LeaderboardCardProps) {
   return (
-    // Enhanced card styling
-    <div className="bg-[#1a0f08]/80 rounded-2xl p-6 md:p-8 shadow-[0_0_30px_rgba(255,215,0,0.15)] border-2 border-amber-800/60 backdrop-blur-sm">
-      <h3 className="text-2xl md:text-3xl font-bold text-amber-400 mb-6 text-center tracking-wide" style={{ textShadow: '0 1px 10px rgba(255, 215, 0, 0.3)' }}>
-        {title}
-      </h3>
-      {/* Use ordered list for ranking */}
-      <ol className="space-y-3">
-        {items.map((item, idx) => (
-          <li
-            key={item.name || item.house || idx} // Use a more reliable key if available
-            className="flex items-center justify-between bg-gradient-to-r from-amber-900/20 via-amber-800/10 to-transparent p-3 rounded-lg border border-amber-900/30 transition-all duration-300 hover:bg-amber-800/20 hover:border-amber-700/50"
-          >
-            <div className="flex items-center space-x-4">
-              {/* Rank */}
-              <span className="text-lg font-bold text-amber-500 w-8 text-center">{item.rank ?? idx + 1}.</span>
-              {/* Name and House */}
-              <div>
-                <div className={`font-semibold text-lg ${item.house ? getHouseColorClass(item.house).split(' ')[0] : 'text-amber-100'}`}>
-                  {item.name || item.house}
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap');
+        
+        @font-face {
+          font-family: 'Harry P';
+          src: url('https://cdn.jsdelivr.net/gh/wizardamigos/harry-potter-font@master/HarryP-MVZ6w.ttf') format('truetype');
+        }
+        
+        .harry-font {
+          font-family: 'Harry P', 'Cinzel', serif;
+        }
+        
+        .cinzel-font {
+          font-family: 'Cinzel', serif;
+        }
+        
+        @keyframes rank-glow {
+          0%, 100% { text-shadow: 0 0 5px rgba(236, 185, 57, 0.5); }
+          50% { text-shadow: 0 0 10px rgba(236, 185, 57, 0.8), 0 0 20px rgba(236, 185, 57, 0.4); }
+        }
+        
+        .rank-number {
+          animation: rank-glow 2s ease-in-out infinite;
+        }
+      `}} />
+
+      <div 
+        className="relative bg-gradient-to-b from-[#0E1A40]/95 to-[#1a2654]/95 border-4 border-[#D3A625] rounded-xl p-6 md:p-8 shadow-2xl backdrop-blur-sm cinzel-font"
+        style={{
+          boxShadow: '0 0 40px rgba(236, 185, 57, 0.3), inset 0 0 60px rgba(14, 26, 64, 0.5)',
+        }}
+      >
+        {/* Decorative corner pieces */}
+        <div className="absolute -top-2 -left-2 w-8 h-8 border-t-4 border-l-4 border-[#ECB939]"></div>
+        <div className="absolute -top-2 -right-2 w-8 h-8 border-t-4 border-r-4 border-[#ECB939]"></div>
+        <div className="absolute -bottom-2 -left-2 w-8 h-8 border-b-4 border-l-4 border-[#ECB939]"></div>
+        <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-4 border-r-4 border-[#ECB939]"></div>
+
+        {/* Title */}
+        <h3 
+          className="text-2xl md:text-3xl font-bold text-[#ECB939] mb-4 text-center tracking-wide"
+          style={{ textShadow: '0 0 10px rgba(236, 185, 57, 0.5), 0 0 20px rgba(236, 185, 57, 0.3)' }}
+        >
+          {title}
+        </h3>
+        
+        {/* Decorative divider */}
+        <div className="w-24 h-1 bg-gradient-to-r from-transparent via-[#D3A625] to-transparent mx-auto mb-6"></div>
+
+        {/* Leaderboard list */}
+        <ol className="space-y-3">
+          {items && items.length > 0 && items.map((item, idx) => (
+            <li
+              key={item.name || item.house || idx}
+              className="flex items-center justify-between bg-[#0E1A40]/60 border-2 border-[#5D5D5D] rounded-lg p-4 transition-all duration-300 hover:border-[#4169E1] hover:shadow-[0_0_15px_rgba(65,105,225,0.4)] hover:bg-[#0E1A40]/80"
+            >
+              <div className="flex items-center space-x-4">
+                {/* Rank number */}
+                <span className="text-xl font-bold text-[#ECB939] w-10 text-center rank-number">
+                  #{item.rank ?? idx + 1}
+                </span>
+                
+                {/* Name and House */}
+                <div>
+                  <div className={`font-semibold text-lg ${item.house ? getHouseColorClass(item.house).split(' ')[0] : 'text-[#AAAAAA]'}`}>
+                    {item.name || item.house}
+                  </div>
+                  {item.house && item.name && (
+                    <div className={`text-sm opacity-80 ${getHouseColorClass(item.house).split(' ')[0]}`}>
+                      {item.house}
+                    </div>
+                  )}
                 </div>
-                {item.house && item.name && ( // Show house only if name also exists
-                  <div className={`text-sm opacity-80 ${getHouseColorClass(item.house).split(' ')[0]}`}>{item.house}</div>
-                )}
               </div>
-            </div>
-            {/* Score */}
-            <div className="text-xl font-mono font-bold text-amber-300 tracking-wider">
-              {/* Display the correct score field */}
-              {item.score ?? item.totalScore ?? item.quaffles ?? 0}
-            </div>
-          </li>
-        ))}
-      </ol>
-       {/* Message if no items */}
-       {items.length === 0 && (
-          <p className="text-center text-amber-500/70 italic mt-6">No rankings available yet.</p>
-       )}
-    </div>
+
+              {/* Score */}
+              <div 
+                className="text-xl font-bold text-[#4169E1] tracking-wider px-4 py-1 bg-[#0E1A40]/80 rounded-md border border-[#4169E1]/30"
+                style={{ textShadow: '0 0 8px rgba(65, 105, 225, 0.4)' }}
+              >
+                {item.score ?? item.totalScore ?? item.quaffles ?? 0}
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        {/* Message if no items */}
+        {(!items || items.length === 0) && (
+          <div className="text-center mt-8 p-6 bg-[#0E1A40]/40 border-2 border-[#5D5D5D] rounded-lg">
+            <p className="text-[#AAAAAA] italic text-lg">
+              The magical rankings shall appear soon...
+            </p>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 

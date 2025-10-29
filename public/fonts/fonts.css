@@ -1,0 +1,22 @@
+@font-face {
+  font-family: 'Harry P';
+  src: url('/fonts/HarryP.ttf') format('truetype'),
+       url('/fonts/HarryP.otf') format('opentype');
+  font-display: swap;
+}
+
+body {
+  font-family: 'Harry P';
+  background: black;
+  color: white;
+  margin: 0;
+}
+
+.platform-title {
+  font-family: 'Harry P';
+  color: #ECB939;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 10px rgba(236, 185, 57, 0.4);
+}
