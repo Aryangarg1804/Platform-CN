@@ -42,6 +42,7 @@
 import { NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongoose'
 import RoundStatus from '@/models/RoundStatus'
+import Log from '@/models/Log'
 
 // GET round status
 export async function GET(req: Request) {
@@ -88,6 +89,19 @@ export async function POST(req: Request) {
       { isLocked },
       { upsert: true, new: true }
     )
+    try {
+      const authHeader = (req as any).headers?.get?.('authorization')
+      let senderEmail = undefined
+      try {
+        const { getUserFromHeader } = await import('@/lib/roundHeadAuth')
+        const user = getUserFromHeader(authHeader)
+        senderEmail = user?.email
+      } catch (e) {}
+      const msg = `${senderEmail || 'unknown'} set ${round} isLocked=${!!isLocked}`
+      await new Log({ message: msg, senderEmail, round, meta: { isLocked } }).save()
+    } catch (e) {
+      console.error('Failed to create log for round-status', e)
+    }
     return NextResponse.json({ round: status.round, isLocked: status.isLocked })
   } catch (err) {
     console.error(err)

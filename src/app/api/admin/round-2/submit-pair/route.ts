@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongoose';
 import Round from '@/models/Round';
 import Team from '@/models/Team';
 import Potion from '@/models/Potion';
+import Log from '@/models/Log';
 
 export async function POST(req: Request) {
   try {
@@ -52,6 +53,19 @@ export async function POST(req: Request) {
 
     // Increment potion's numberOfTimesCreated
     await Potion.updateOne({ _id: potionId }, { $inc: { numberOfTimesCreated: 1 } });
+
+    // create a log entry for this pair submission
+    try {
+      const authHeader = (req as any).headers?.get?.('authorization')
+      let senderEmail = undefined
+      try {
+        const { getUserFromHeader } = await import('@/lib/roundHeadAuth')
+        const user = getUserFromHeader(authHeader)
+        senderEmail = user?.email
+      } catch (e) {}
+      const msg = `${senderEmail || 'unknown'} submitted pair result for round-2: teams ${team1Id} & ${team2Id}, points ${points}`
+      await new Log({ message: msg, senderEmail, round: 'round-2', points: Number(points), meta: { team1Id, team2Id, potionId } }).save()
+    } catch (e) { console.error('Failed to create log for round-2 submit', e) }
 
     return NextResponse.json({ success: true, result: resultEntry });
   } catch (err: any) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongoose'
 import HouseLeaderboard from '@/models/HouseLeaderboard'
 import Round from '@/models/Round' // <<< ADDED: Import Round model
+import Log from '@/models/Log'
 import { getUserFromHeader, canAccessRound, getRoundNumber } from '@/lib/roundHeadAuth'
 
 export async function POST(req: NextRequest) {
@@ -25,6 +26,14 @@ export async function POST(req: NextRequest) {
     // 2. IMPORTANT: Update the specific Round document to track the winner for public display
     // This makes the winner available to the public/round-N pages.
     await Round.findOneAndUpdate({ name: round }, { quaffleWinnerHouse: house }, { upsert: true }); // <<< NEW LOGIC
+
+    // 3. Create a Log entry
+    try {
+      const msg = `${user.email} awarded a quaffle to ${house} for ${round}`
+      await new Log({ message: msg, senderEmail: user.email, round, meta: { house } }).save()
+    } catch (e) {
+      console.error('Failed to create log for award-quaffle', e)
+    }
 
     return NextResponse.json({ success: true, house: hb })
   } catch (err) {

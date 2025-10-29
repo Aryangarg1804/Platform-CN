@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongoose'
 import HouseLeaderboard from '@/models/HouseLeaderboard'
 import Round from '@/models/Round' 
+import Log from '@/models/Log'
 import { getUserFromHeader, canAccessRound, getRoundNumber } from '@/lib/roundHeadAuth'
 
 export async function POST(req: NextRequest) {
@@ -36,6 +37,11 @@ export async function POST(req: NextRequest) {
         { $set: { quaffleWinnerHouse: null } }
     ); 
 
+    // create log
+    try {
+      const msg = `${user.email} reverted quaffle from ${house} for ${round}`
+      await new Log({ message: msg, senderEmail: user.email, round, meta: { house } }).save()
+    } catch (e) { console.error('Failed to create log for revert-quaffle', e) }
     return NextResponse.json({ success: true, message: `Quaffle reverted from ${house} for ${round}.` })
   } catch (err) {
     console.error(`POST /api/admin/revert-quaffle error:`, err)

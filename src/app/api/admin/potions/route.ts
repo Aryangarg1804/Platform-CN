@@ -2,6 +2,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongoose';
 import Potion from '@/models/Potion';
+import Log from '@/models/Log';
 import Team from '@/models/Team'; // Import Team model
 import { Types } from 'mongoose';
 
@@ -40,6 +41,23 @@ export async function POST(req: NextRequest) {
 
     const newPotion = new Potion({ name, ingredients, numberOfTimesCreated: 0 });
     await newPotion.save();
+
+    // create a log for potion creation (try to obtain sender from header if present)
+    try {
+      const authHeader = (req as any).headers?.get?.('authorization')
+      let senderEmail = undefined
+      try {
+        const { getUserFromHeader } = await import('@/lib/roundHeadAuth')
+        const user = getUserFromHeader(authHeader)
+        senderEmail = user?.email
+      } catch (e) {
+        // ignore
+      }
+      const msg = `${senderEmail || 'unknown'} created potion ${name}`
+      await new Log({ message: msg, senderEmail, meta: { potionId: newPotion._id, ingredients } }).save()
+    } catch (e) {
+      console.error('Failed to create log for potion creation', e)
+    }
 
     return NextResponse.json(newPotion, { status: 201 });
 

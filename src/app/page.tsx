@@ -352,10 +352,10 @@ export default function HomePage() {
         {/* --- House Virtues Section (Snap Point 3) --- */}
         <section
           ref={trialsRef}
-          className="min-h-screen snap-start flex flex-col items-center justify-start relative z-20 p-4 sm:p-6 md:p-8 overflow-hidden"
+          className="min-h-screen snap-start flex flex-col items-center justify-center relative z-20 p-4 pb-16 sm:p-6 md:p-8 overflow-hidden"
         >
           <motion.div
-            className="w-full flex flex-col items-center pt-8 sm:pt-12"
+            className="w-full flex flex-col items-center gap-8 sm:gap-12"
             variants={sectionFadeIn}
             initial="hidden"
             whileInView="visible"
@@ -370,10 +370,10 @@ export default function HomePage() {
             </motion.h2>
 
             {/* Banners Grid */}
-            <div className="w-full max-w-7xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 px-2">
+            <div className="w-full max-w-7xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 px-2 mb-2 sm:mb-4">
               {/* Gryffindor Banner */}
               <motion.div
-                className="h-48 sm:h-56 md:h-64 rounded-lg border-2 sm:border-4 border-red-800/50 shadow-2xl p-3 sm:p-4 flex flex-col justify-between text-center relative overflow-hidden group"
+                className="h-36 sm:h-44 md:h-52 rounded-lg border-2 sm:border-4 border-red-800/50 shadow-2xl p-3 sm:p-4 flex flex-col justify-between text-center relative overflow-hidden group"
                 whileHover={{ scale: 1.05, shadow: '0 0 30px rgba(185, 28, 28, 0.7)' }}
                 style={{ y: trialBannerY(0) }}
                 variants={itemFadeIn}
@@ -466,35 +466,33 @@ export default function HomePage() {
             </div>
 
             {/* --- Start Trial Button with Decorative Elements --- */}
-            <div className="relative w-full max-w-[80%] sm:max-w-[60%] md:max-w-[50%] mx-auto flex justify-center items-center mt-2 sm:mt-4">
-              {/* Left Line */}
-              <div className="absolute left-0 w-[20%] sm:w-1/4 flex items-center">
-                <div className="h-[1px] sm:h-[2px] flex-grow bg-gradient-to-r from-transparent to-amber-400"></div>
+            <div className="relative w-full flex justify-center items-center mt-0 mb-16 sm:mb-24">
+              {/* Left Line - Hidden on mobile */}
+              <div className="absolute left-0 w-1/3 hidden sm:flex items-center">
+                <div className="h-[2px] flex-grow bg-gradient-to-r from-transparent to-amber-400"></div>
               </div>
 
-              {/* Right Line */}
-              <div className="absolute right-0 w-[20%] sm:w-1/4 flex items-center">
-                <div className="h-[1px] sm:h-[2px] flex-grow bg-gradient-to-l from-transparent to-amber-400"></div>
+              {/* Right Line - Hidden on mobile */}
+              <div className="absolute right-0 w-1/3 hidden sm:flex items-center">
+                <div className="h-[2px] flex-grow bg-gradient-to-l from-transparent to-amber-400"></div>
               </div>
 
               {/* Button Container */}
-              <div className="relative mx-2 sm:mx-4">
-                {/* Outer Border */}
-                <div className="absolute inset-0 border border-amber-400 sm:border-2 rounded-md"></div>
+              <div className="relative">
                 {/* Button */}
                 <motion.button
                   onClick={() => window.location.href = '/public'}
-                  className="font-magic px-4 sm:px-8 md:px-12 py-2 sm:py-3 
-                            bg-transparent text-white text-sm sm:text-lg md:text-xl 
+                  className="font-magic px-6 sm:px-12 md:px-16 py-2 sm:py-3 md:py-4 
+                            bg-transparent text-white text-base sm:text-xl md:text-2xl 
                             rounded-md relative z-10 
-                            border border-amber-400
+                            border-2 border-amber-400
                             uppercase tracking-wider overflow-hidden
-                            whitespace-nowrap"
+                            scale-90 sm:scale-100"
                   initial="initial"
                   animate="animate"
                 >
                   <motion.span
-                    className="block"
+                    className="block whitespace-nowrap"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ 

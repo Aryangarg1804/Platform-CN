@@ -58,19 +58,27 @@ export default function Round3() {
 
       if (teamsData && teamsData.length) {
         const activeTeams = teamsData.filter(t => t.isActive !== false && t.isEliminated !== true);
-        
-        const filledTeams: Team[] = activeTeams.map((dbTeam: any, index: number) => ({
+
+        // Build the fresh team list from DB (default score = 0)
+        const freshTeams: Team[] = activeTeams.map((dbTeam: any, index: number) => ({
             _id: dbTeam._id,
-            id: index + 1, 
+            id: index + 1,
             name: dbTeam.name,
             house: dbTeam.house,
             totalPoints: dbTeam.totalPoints || 0,
             isActive: dbTeam.isActive !== false,
-            score: 0, // Reset input score to 0 on fetch
+            score: 0,
         }));
-        
-        filledTeams.sort((a, b) => a.name.localeCompare(b.name));
-        setTeams(filledTeams);
+
+        // Sort by name for stable ordering
+        freshTeams.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Merge with previous state to preserve in-progress scores (use functional update so we don't rely on
+        // the captured `teams` variable from a stale closure)
+        setTeams(prev => {
+          const prevScoreMap = new Map(prev.map(t => [t._id, t.score] as [string, number]));
+          return freshTeams.map(t => ({ ...t, score: prevScoreMap.get(t._id) ?? t.score }));
+        });
       } else {
         setTeams([]);
       }
@@ -370,6 +378,7 @@ export default function Round3() {
                           type="number"
                           value={team.score}
                           onChange={e => handleChange(team.id, Number(e.target.value))}
+                          onWheel={e => e.currentTarget.blur()}
                           disabled={roundLocked}
                           className={`w-32 bg-gray-700 border ${roundLocked ? 'border-gray-600' : 'border-amber-900/50'} rounded p-1 text-amber-100 text-right focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-70 disabled:cursor-not-allowed`}
                            placeholder="0"
