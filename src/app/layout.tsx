@@ -1,56 +1,50 @@
-// src/app/ClientRootLayout.tsx (This is the Client Component)
-'use client' 
+'use client';
+import './globals.css';
+import React, { useState } from 'react';
 
-import './globals.css'
-import React, { useState } from 'react'
-
-// ❌ REMOVE THE 'export const metadata' BLOCK FROM HERE
-
-export default function ClientRootLayout({ children }: { children: React.ReactNode }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-
-  const toggleMenu = () => {
-    setIsMenuOpen(!isMenuOpen)
-  }
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-black text-white overflow-x-hidden">
-        <header className="w-full py-4 px-6 bg-gradient-to-r from-[#2b1a0f] via-[#4b2b13] to-[#2b1a0f] shadow-md border-b-2 border-yellow-600/10">
+      <head>
+      </head>
+      <body>
+        <header className="header-bg w-full py-4 px-6">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
-            
-            <div className="flex items-center gap-4">
-              <div className="text-2xl font-['Cinzel'] text-amber-300">⚡ Platform 9¾</div>
-              <div className="text-sm text-amber-200 hidden sm:block">Hogwarts Tournament</div>
+            <div className="flex flex-col gap-1">
+              <div className="platform-title">Platform 9¾</div>
+              <div className="subtitle hidden sm:block">Hogwarts Tournament</div>
             </div>
 
-            <button 
-              className="sm:hidden text-amber-200 text-3xl p-2 focus:outline-none"
-              onClick={toggleMenu}
+            <button
+              className="sm:hidden menu-btn"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label="Toggle navigation menu"
             >
               {isMenuOpen ? '✕' : '☰'}
             </button>
-            
-            <nav 
-              className={`
-                absolute sm:static top-16 left-0 w-full sm:w-auto 
-                bg-[#2b1a0f] sm:bg-transparent shadow-lg sm:shadow-none 
-                flex flex-col sm:flex-row items-center gap-4 py-4 sm:py-0 
-                z-50 transition-all duration-300 ease-in-out
-                ${isMenuOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0 hidden sm:flex'}
-              `}
-            >
-              <a href="/" onClick={toggleMenu} className="text-amber-200 hover:underline">Home</a>
-              <a href="/public/house-leaderboard" onClick={toggleMenu} className="text-amber-200 hover:underline">House Leaderboard</a>
-              <a href="/public/team-leaderboard" onClick={toggleMenu} className="text-amber-200 hover:underline">Team Leaderboard</a>
+
+            <nav className="hidden sm:flex items-center gap-2">
+              <a href="/" className="nav-link">Home</a>
+              <a href="/public/house-leaderboard" className="nav-link">House Leaderboard</a>
+              <a href="/public/team-leaderboard" className="nav-link">Team Leaderboard</a>
             </nav>
-            
           </div>
+
+          {isMenuOpen && (
+            <nav className="mobile-menu sm:hidden absolute top-20 left-4 right-4 py-6 rounded z-50">
+              <div className="flex flex-col items-center gap-6">
+                <a href="/" onClick={() => setIsMenuOpen(false)} className="nav-link">Home</a>
+                <a href="/public/house-leaderboard" onClick={() => setIsMenuOpen(false)} className="nav-link">House Leaderboard</a>
+                <a href="/public/team-leaderboard" onClick={() => setIsMenuOpen(false)} className="nav-link">Team Leaderboard</a>
+              </div>
+            </nav>
+          )}
         </header>
 
         {children}
       </body>
     </html>
-  )
+  );
 }

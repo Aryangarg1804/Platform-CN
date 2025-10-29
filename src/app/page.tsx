@@ -29,4 +29,6 @@ export default function HomePage() {
       <div className="spark spark-2" />
     </div>
   )
+
 }
+
