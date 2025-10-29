@@ -94,18 +94,51 @@ export default function RoundLeaderboard({ roundNumber }: RoundLeaderboardProps)
           setRoundWinner(data.round?.quaffleWinnerHouse || null);
           
           if (config.type === 'team' && data.round?.results) {
-              // Process team results for scoring rounds
-              const sortedResults = data.round.results.sort((a: any, b: any) => b.points - a.points);
-              
-              const mappedTeams: TeamResult[] = sortedResults.map((r: any, index: number) => ({
-                rank: index + 1,
-                teamName: r.team?.name || 'Unknown Team',
-                house: r.team?.house || 'Unknown House',
-                score: r.points || 0,
-                subScore: r.time || r.strategy || r.defense || r.knowledge || 0,
-              }));
-              
-              setTeams(mappedTeams);
+              if (roundNumber === 2) {
+                  // Special handling for Round 2's pair-based results
+                  const teamScores = new Map<string, { score: number, time: number, house: string, name: string }>();
+                  
+                  // Process pair results
+                  data.round.results.forEach((r: any) => {
+                      // Each result has two teams that get the same points
+                      r.teams?.forEach((team: any) => {
+                          if (!team) return;
+                          const currentScore = teamScores.get(team._id) || { score: 0, time: 0, house: team.house, name: team.name };
+                          teamScores.set(team._id, {
+                              score: currentScore.score + (r.points || 0),
+                              time: currentScore.time + (r.time || 0),
+                              house: team.house,
+                              name: team.name
+                          });
+                      });
+                  });
+
+                  // Convert Map to array and sort by score
+                  const sortedTeams = Array.from(teamScores.entries())
+                      .map(([id, data]) => ({
+                          teamName: data.name,
+                          house: data.house,
+                          score: data.score,
+                          subScore: data.time
+                      }))
+                      .sort((a, b) => b.score - a.score)
+                      .map((team, index) => ({ ...team, rank: index + 1 }));
+
+                  setTeams(sortedTeams);
+              } else {
+                  // Process team results for other rounds
+                  const sortedResults = data.round.results.sort((a: any, b: any) => b.points - a.points);
+                  
+                  const mappedTeams: TeamResult[] = sortedResults.map((r: any, index: number) => ({
+                      rank: index + 1,
+                      teamName: r.team?.name || 'Unknown Team',
+                      house: r.team?.house || 'Unknown House',
+                      score: r.points || 0,
+                      subScore: r.time || r.strategy || r.defense || r.knowledge || 0,
+                  }));
+                  
+                  setTeams(mappedTeams);
+              }
           } else {
               setTeams([]); 
           }
