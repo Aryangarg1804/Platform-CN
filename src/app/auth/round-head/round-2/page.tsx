@@ -423,12 +423,12 @@ export default function Round2() {
 
   // --- Render Loading State (Remains the same) ---
   if (loading) {
-     return ( <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-400 text-2xl font-['Cinzel'] animate-pulse"> Loading Round 2 Data... 🧪 </div> );
+     return ( <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#050811] via-[#182c60] to-[#080b14] text-amber-400 text-2xl font-['Cinzel'] animate-pulse"> Loading Round 2 Data... 🧪 </div> );
   }
 
   // --- Render Main Page (Adjusted Header and removed Lock button) ---
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-amber-100 p-6 font-['Cinzel']">
+    <div className="min-h-screen bg-gradient-to-br from-[#050811] via-[#182c60] to-[#080b14] text-amber-100 p-6 font-['Cinzel']">
       <div className="max-w-7xl mx-auto">
         {/* Header - Adjusted for Round Head */}
         <header className="text-center mb-8">
