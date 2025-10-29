@@ -1,95 +1,110 @@
-
 'use client'
 
 import { useState, useEffect } from 'react'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts'
+
+// Interface simplified to remove score fields
+interface Team {
+  _id: string
+  id: number
+  name: string
+  house: string
+  isActive: boolean
+}
+
+// Interface for new team state
+interface NewTeam {
+    name: string;
+    house: string;
+}
 
 export default function Round1Page() {
   const houses = ['Gryffindor', 'Hufflepuff', 'Ravenclaw']
 
-  const initialTeams = Array.from({ length: 24 }, (_, i) => ({
-    id: i + 1,
-    name: '',
-    house: '',
-    score: 0,
-  }))
+  // Initial teams structure is only used for shape, data is populated from API
+  const initialTeams: Team[] = []
 
-  const [teams, setTeams] = useState(initialTeams)
+  const [teams, setTeams] = useState<Team[]>(initialTeams)
   const [roundLocked, setRoundLocked] = useState(true)
   const [loading, setLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
-  const [savedTeams, setSavedTeams] = useState<any[]>([])
+  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+
+  // NEW STATE FOR ADD TEAM FUNCTIONALITY
+  const [showAddTeam, setShowAddTeam] = useState(false)
+  const [newTeam, setNewTeam] = useState<NewTeam>({
+    name: '',
+    house: '',
+  })
+  // END NEW STATE
 
   useEffect(() => {
     setIsMounted(true)
   }, [])
 
-  // Fetch initial data and poll round lock status
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const statusRes = await fetch('/api/admin/round-status')
+  // Fetch initial data (full teams and lock status)
+  const fetchData = async () => {
+    try {
+        // 1. Get lock status
+        const statusRes = await fetch('/api/admin/round-status?round=round-1')
         const statusData = await statusRes.json()
         setRoundLocked(statusData.isLocked)
 
+        // 2. Get teams (gets ALL teams, including inactive/eliminated, to allow editing/re-activating)
         const teamsRes = await fetch('/api/admin/teams')
         const teamsData = await teamsRes.json()
-        if (teamsData && teamsData.length) {
-          // --- FIX IS HERE ---
-          // We must merge the API data INTO our initialTeams array
-          // to ensure the stable `id` (1-24) is always present for
-          // React keys and the handleChange function.
-          const filledTeams = initialTeams.map((team, idx) => {
-            if (teamsData[idx]) {
-              // Start with the initial team structure (which has the stable id)
-              // and spread the data from the API over it.
-              // Finally, explicitly re-set the id to be safe.
-              return {
-                ...team, // Has { id: 1, name: '', ... }
-                ...teamsData[idx], // Has { _id: 'abc', name: 'Team 1', ... }
-                id: team.id, // Ensures final object has { id: 1, _id: 'abc', ... }
-              };
-            }
-            // No API data for this index, use the default initial team
-            return team;
-          });
-          setTeams(filledTeams)
-        }
-      } catch (err) {
+        
+        // Map ALL fetched teams into local Team array structure
+        let localIdCounter = 1;
+        const mappedTeams: Team[] = teamsData.map((dbTeam: any) => ({
+            _id: dbTeam._id,
+            id: localIdCounter++, // Assign continuous IDs for keys/display
+            name: dbTeam.name, 
+            house: dbTeam.house,
+            isActive: dbTeam.isActive !== false, 
+        }))
+        
+        // Sort active teams first for better visibility
+        mappedTeams.sort((a, b) => (b.isActive as any) - (a.isActive as any) || a.name.localeCompare(b.name));
+        
+        setTeams(mappedTeams)
+    } catch (err) {
         console.error(err)
-      } finally {
+        setMessage('Error loading initial data.')
+    } finally {
         setLoading(false)
-      }
     }
+  }
 
-    fetchData()
-
-    const interval = setInterval(async () => {
+  // NEW: Lightweight function to poll ONLY the lock status
+  const pollLockStatus = async () => {
       try {
-        const res = await fetch('/api/admin/round-status')
+        const res = await fetch('/api/admin/round-status?round=round-1')
         const data = await res.json()
         setRoundLocked(data.isLocked)
       } catch (err) {
-        console.error(err)
+        console.error('Error polling lock status:', err)
       }
-    }, 5000)
+  }
+
+
+  useEffect(() => {
+    fetchData() // 1. Initial full fetch of data and lock status
+
+    // 2. Set up interval for light polling (only lock status)
+    const interval = setInterval(() => {
+        if (isMounted) {
+            pollLockStatus(); 
+        }
+    }, 5000) // Poll lock status every 5 seconds
 
     return () => clearInterval(interval)
-  }, []) // Empty dependency array is correct, runs once on mount
+  }, [isMounted]) 
 
   const handleChange = (
     id: number,
-    field: keyof typeof teams[0],
-    value: string | number
+    field: 'name' | 'house',
+    value: string
   ) => {
     if (roundLocked) return
     setTeams(prev =>
@@ -98,101 +113,254 @@ export default function Round1Page() {
   }
 
   const toggleLock = async () => {
+    setMessage('')
     try {
       const res = await fetch('/api/admin/round-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isLocked: !roundLocked }),
+        body: JSON.stringify({ round: 'round-1', isLocked: !roundLocked }),
       })
       const data = await res.json()
       setRoundLocked(data.isLocked)
+      setMessage(`Round ${data.isLocked ? 'locked' : 'unlocked'} successfully.`)
     } catch (err) {
       console.error('Error toggling lock:', err)
+      setMessage('Error updating lock status.')
     }
+    setTimeout(() => setMessage(''), 3000)
   }
 
-  const saveTeams = async () => {
-    if (roundLocked) {
-      console.log('Round-1 is locked. Cannot save teams.')
+  const handleAddTeam = async () => {
+    if (!newTeam.name || !newTeam.house) {
+      setMessage('Please fill all fields for the new team.')
+      setTimeout(() => setMessage(''), 3000)
       return
     }
+
+    if (roundLocked) {
+        setMessage('Round is locked. Cannot add new teams.')
+        setTimeout(() => setMessage(''), 3000)
+        return
+    }
+    
+    setSubmissionStatus('submitting')
+    setMessage('Adding new team...')
+
     try {
-      const res = await fetch('/api/admin/teams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teams), // send array of teams
-      })
-      const data = await res.json()
-      if (res.ok && data.teams) {
-        // set saved teams with DB ids returned by server
-        setSavedTeams(data.teams)
-        console.log('Teams saved', data.teams.length)
-      } else {
-        console.log('Failed to save teams', data.error)
-      }
-    } catch (err) {
-      console.error(err)
-      console.log('Error saving teams')
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+
+        const res = await fetch('/api/admin/teams', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify([ 
+                {
+                    name: newTeam.name,
+                    house: newTeam.house,
+                    roundsParticipating: [1], 
+                    isActive: true
+                }
+            ])
+        })
+
+        if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(errorData.error || 'Failed to add team.')
+        }
+
+        setMessage('Team added successfully!')
+        setNewTeam({ name: '', house: '' })
+        setShowAddTeam(false)
+        setSubmissionStatus('success')
+
+        // IMPORTANT: Refresh data to show the newly added team in the table
+        await fetchData()
+
+    } catch (err: any) {
+        console.error('Error adding team:', err)
+        setMessage('Error adding team: ' + err.message)
+        setSubmissionStatus('error')
+    } finally {
+        setTimeout(() => setSubmissionStatus('idle'), 3000)
     }
   }
 
-  // Submit round results to round API (round-1)
-  const submitRoundResults = async () => {
+  // Function to remove (mark inactive) a team
+  const handleRemoveTeam = async (teamId: string, teamName: string) => {
+    if (roundLocked) {
+        setMessage('Round is locked. Cannot remove teams.')
+        setTimeout(() => setMessage(''), 3000)
+        return
+    }
+    if (!confirm(`Are you sure you want to remove (mark inactive) the team "${teamName}"?`)) return;
+
+    setSubmissionStatus('submitting')
+    setMessage(`Removing team ${teamName}...`)
     try {
-      // Prefer using savedTeams (with DB _id) if available
-      const source = savedTeams.length ? savedTeams : teams
-      const results = source
-        .filter((t: any) => t.name && t.name.trim() !== '')
-        .map((t: any, idx: number) => ({
-          team: t._id || t.id,
-          points: Number(t.score || 0),
-          time: 0,
-          rank: idx + 1,
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+
+      const res = await fetch('/api/admin/teams', {
+        method: 'DELETE',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ teamId }), // Calls DELETE endpoint to set isActive: false
+      })
+
+      if (!res.ok) {
+          const errorData = await res.json()
+          throw new Error(errorData.error || 'Failed to remove team.')
+      }
+
+      setMessage(`Team ${teamName} removed (set to Inactive).`)
+      setSubmissionStatus('success')
+
+      // Update local state immediately to reflect removal/inactivity status
+      setTeams(prevTeams => prevTeams.map(t => 
+        t._id === teamId ? { ...t, isActive: false } : t
+      ))
+      
+    } catch (err: any) {
+        console.error('Error removing team:', err)
+        setMessage('Error removing team: ' + err.message)
+        setSubmissionStatus('error')
+    } finally {
+        setTimeout(() => setSubmissionStatus('idle'), 3000)
+    }
+  }
+
+  // NEW: Function to activate a team (set isActive: true)
+  const handleActivateTeam = async (teamId: string, teamName: string) => {
+      if (roundLocked) {
+        setMessage('Round is locked. Cannot activate teams.')
+        setTimeout(() => setMessage(''), 3000)
+        return
+      }
+
+      setSubmissionStatus('submitting')
+      setMessage(`Activating team ${teamName}...`)
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+
+        // Reusing the POST endpoint to update isActive status
+        const res = await fetch('/api/admin/teams', {
+          method: 'POST',
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+          },
+          // Send only the necessary fields: _id, name, house, and isActive: true
+          body: JSON.stringify([
+              { 
+                _id: teamId, 
+                name: teamName, // Required by POST endpoint
+                house: teams.find(t => t._id === teamId)?.house || 'Gryffindor', // Use current house
+                isActive: true,
+              }
+          ]),
+        })
+
+        if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(errorData.error || 'Failed to activate team.')
+        }
+
+        setMessage(`Team ${teamName} activated.`)
+        setSubmissionStatus('success')
+
+        // Update local state immediately
+        setTeams(prevTeams => prevTeams.map(t => 
+          t._id === teamId ? { ...t, isActive: true } : t
+        ))
+
+      } catch (err: any) {
+          console.error('Error activating team:', err)
+          setMessage('Error activating team: ' + err.message)
+          setSubmissionStatus('error')
+      } finally {
+          setTimeout(() => setSubmissionStatus('idle'), 3000)
+      }
+  }
+
+  // Consolidated Save function: Updates Team model + updates Round model.
+  const saveAndSubmitTeams = async () => {
+    if (roundLocked) {
+      setMessage('Round is locked. Cannot save or submit.')
+      setTimeout(() => setMessage(''), 3000)
+      return
+    }
+    setSubmissionStatus('submitting')
+    setMessage('Saving teams and finalizing Round 1 setup...')
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+
+      // 1. Prepare data for POST /api/admin/teams (Update Name/House)
+      // Only process currently ACTIVE teams for saving/submitting
+      const teamsToUpdate = teams
+        .filter(t => t.name.trim() !== '' && t.isActive) 
+        .map(team => ({
+          ...(team._id && { _id: team._id }), 
+          name: team.name, 
+          house: team.house,
+          roundsParticipating: [1, 2, 3, 4], 
+          score: 0, 
         }))
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-      const headers: any = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
-
-      const res = await fetch('/api/rounds/round-1', {
+      if (teamsToUpdate.length === 0) {
+        throw new Error('No ACTIVE team names entered to save. Please add/re-activate at least one team.')
+      }
+        
+      const teamSaveRes = await fetch('/api/admin/teams', { 
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(teamsToUpdate),
+      })
+      
+      const teamSaveData = await teamSaveRes.json()
+
+      if (!teamSaveRes.ok) {
+          throw new Error(teamSaveData.error || 'Failed to save teams data.')
+      }
+
+      // 2. Prepare data for POST /api/rounds/round-1 (Log Final Round Results)
+      const savedTeams = teamSaveData.teams.filter((t: any) => t.name.trim() !== '' && t.isActive !== false)
+      
+      const results = savedTeams
+        .sort((a: any, b: any) => (b.totalPoints || 0) - (a.totalPoints || 0)) 
+        .map((team: any, idx: number) => ({
+          team: team._id,
+          points: 0, 
+          time: 0,
+          rank: idx + 1,
+      }))
+
+      await fetch('/api/rounds/round-1', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ results, approved: true }),
       })
-      const data = await res.json()
-      if (data.success) {
-        console.log('Round results saved')
-      } else {
-        console.error('Failed to save round results', data)
-      }
-    } catch (err) {
-      console.error('submitRoundResults error', err)
+
+      setSubmissionStatus('success')
+      setMessage('Teams updated and Round 1 setup finalized! (Scores are set to 0)')
+      await fetchData() 
+    } catch (err: any) {
+      console.error(err)
+      setMessage('Error saving/submitting: ' + err.message)
+      setSubmissionStatus('error')
+    } finally {
+      setTimeout(() => setSubmissionStatus('idle'), 3000)
     }
   }
-
-  const addTeam = (name: string, house: string) => {
-    const newId = teams.length ? Math.max(...teams.map(t => t.id)) + 1 : 1
-    setTeams(prev => [...prev, { id: newId, name, house, score: 0 }])
-  }
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
-
-  // House-wise leaderboard
-  const houseScores = houses.map(house => ({
-    name: house,
-    total: teams
-      .filter(t => t.house === house && t.name.trim() !== '')
-      .reduce((sum, t) => sum + Number(t.score || 0), 0),
-  }))
-
-  // Team-wise leaderboard
-  const teamScores = teams
-    .filter(t => t.name.trim() !== '')
-    .map(t => ({
-      name: t.name,
-      score: Number(t.score || 0),
-      house: t.house,
-    }))
 
 
   if (loading) {
@@ -223,7 +391,7 @@ export default function Round1Page() {
       overflow: 'hidden',
       fontFamily: '"Cinzel", "Palatino Linotype", serif',
     }}>
-      {/* Animated magical particles */}
+      {/* Animated magical particles - KEPT FOR THEME */}
       {isMounted && [...Array(50)].map((_, i) => (
         <div
           key={`particle-${i}`}
@@ -239,35 +407,12 @@ export default function Round1Page() {
             animationDelay: `${Math.random() * 5}s`,
             opacity: 0.7,
             boxShadow: `0 0 ${Math.random() * 10 + 5}px currentColor`,
+            zIndex: 0,
           }}
         />
       ))}
 
-      {/* Brick wall texture overlay */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundImage: `repeating-linear-gradient(
-          90deg,
-          rgba(139, 69, 19, 0.1) 0px,
-          rgba(139, 69, 19, 0.1) 1px,
-          transparent 1px,
-          transparent 120px
-        ),
-        repeating-linear-gradient(
-          0deg,
-          rgba(139, 69, 19, 0.1) 0px,
-          rgba(139, 69, 19, 0.1) 1px,
-          transparent 1px,
-          transparent 60px
-        )`,
-        pointerEvents: 'none',
-        opacity: 0.3,
-      }} />
-
+      {/* Styles for animations, copied from original */}
       <style>{`
         @keyframes float {
           0%, 100% { 
@@ -320,15 +465,14 @@ export default function Round1Page() {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.05); }
         }
-        /* Style for the table row hover */
         tbody tr:hover {
           background-color: rgba(80, 40, 20, 0.6) !important;
           box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
         }
       `}</style>
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: '1600px', margin: '0 auto' }}>
-        {/* Header with Platform 9¾ theme */}
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Header */}
         <div style={{
           textAlign: 'center',
           marginBottom: '3rem',
@@ -366,7 +510,7 @@ export default function Round1Page() {
             lineHeight: 1.1,
             fontFamily: '"Cinzel Decorative", serif',
           }}>
-            🎩 The Sorting Hat Ceremony
+            🎩 The Sorting Hat Ceremony Setup
           </h1>
 
           <div style={{
@@ -377,7 +521,7 @@ export default function Round1Page() {
             textShadow: '0 2px 10px rgba(212, 175, 55, 0.5)',
             fontFamily: '"Palatino Linotype", serif',
           }}>
-            Platform 9¾ • Hogwarts Express
+            Set up teams and houses for the entire tournament.
           </div>
 
           <div style={{
@@ -430,6 +574,22 @@ export default function Round1Page() {
           </button>
         </div>
 
+        {/* Message Display */}
+        {message && (
+             <div style={{
+                 background: submissionStatus === 'error' ? 'rgba(139, 0, 0, 0.5)' : 'rgba(26, 93, 26, 0.5)',
+                 border: `2px solid ${submissionStatus === 'error' ? '#8b0000' : '#1a5d1a'}`,
+                 color: submissionStatus === 'error' ? '#ff4444' : '#90ee90',
+                 padding: '1rem',
+                 borderRadius: '10px',
+                 textAlign: 'center',
+                 marginBottom: '2.5rem',
+                 fontWeight: 700,
+             }}>
+                 {message}
+             </div>
+        )}
+
         {/* Lock Warning Message */}
         {roundLocked && (
           <div style={{
@@ -461,7 +621,7 @@ export default function Round1Page() {
               fontStyle: 'italic',
               fontFamily: '"Palatino Linotype", serif',
             }}>
-              The Great Hall doors are sealed. Teams and scores remain hidden until the enchantment is lifted...
+              The Great Hall doors are sealed. Team updates are disabled until the enchantment is lifted...
             </p>
           </div>
         )}
@@ -469,6 +629,61 @@ export default function Round1Page() {
         {/* Main Content - Show only when unlocked */}
         {!roundLocked && (
           <>
+            {/* NEW: Add Team Section */}
+            <div style={{
+                background: 'linear-gradient(145deg, rgba(60, 30, 15, 0.9), rgba(30, 15, 8, 0.9))',
+                border: '3px solid #8b4513',
+                borderRadius: '15px',
+                padding: '2rem',
+                marginBottom: '2rem',
+                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 215, 0, 0.2)',
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h2 style={{ fontSize: '1.5rem', color: '#ffd700', fontFamily: '"Cinzel", serif' }}>Manage Teams</h2>
+                    <button
+                        onClick={() => setShowAddTeam(!showAddTeam)}
+                        style={{ padding: '0.5rem 1.5rem', background: '#c41e3a', color: '#ffd700', border: '2px solid #ffd700', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+                    >
+                        {showAddTeam ? 'Cancel' : '+ Add New Team'}
+                    </button>
+                </div>
+
+                {showAddTeam && (
+                    <div style={{ background: 'rgba(20, 10, 5, 0.8)', padding: '1.5rem', borderRadius: '10px', marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                            <input
+                                type="text"
+                                placeholder="Team Name"
+                                value={newTeam.name}
+                                onChange={e => setNewTeam(prev => ({ ...prev, name: e.target.value }))}
+                                style={{ flex: '1', minWidth: '150px', padding: '0.7rem', background: '#0a0705', border: '1px solid #8b4513', borderRadius: '8px', color: '#ffd700' }}
+                                disabled={submissionStatus === 'submitting'}
+                            />
+                            <select
+                                value={newTeam.house}
+                                onChange={e => setNewTeam(prev => ({ ...prev, house: e.target.value }))}
+                                style={{ flex: '1', minWidth: '150px', padding: '0.7rem', background: '#0a0705', border: '1px solid #8b4513', borderRadius: '8px', color: '#ffd700' }}
+                                disabled={submissionStatus === 'submitting'}
+                            >
+                                <option value="">Select House</option>
+                                {houses.map(house => (
+                                    <option key={house} value={house} style={{ background: '#0a0705' }}>{house}</option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleAddTeam}
+                                disabled={submissionStatus === 'submitting' || !newTeam.name || !newTeam.house}
+                                style={{ padding: '0.7rem 1.5rem', background: '#1a5d1a', color: '#fff', border: '1px solid #1a5d1a', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, opacity: (submissionStatus === 'submitting' || !newTeam.name || !newTeam.house) ? 0.6 : 1 }}
+                            >
+                                {submissionStatus === 'submitting' ? 'Adding...' : 'Add Team'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+            {/* END NEW: Add Team Section */}
+
+
             {/* Teams Registry Table */}
             <div style={{
               background: 'linear-gradient(145deg, rgba(60, 30, 15, 0.98), rgba(30, 15, 8, 0.98))',
@@ -536,13 +751,21 @@ export default function Round1Page() {
                         letterSpacing: '0.1em',
                         fontFamily: '"Cinzel", serif',
                         fontSize: '1.1rem',
-                      }}>Score</th>
+                      }}>Status</th>
+                      <th style={{
+                        padding: '1.2rem',
+                        border: '2px solid #8b4513',
+                        fontWeight: 800,
+                        letterSpacing: '0.1em',
+                        fontFamily: '"Cinzel", serif',
+                        fontSize: '1.1rem',
+                      }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {teams.map((team, index) => (
-                      <tr key={team.id} style={{ // key={team.id} is now stable
-                        background: 'rgba(20, 10, 5, 0.4)',
+                      <tr key={team.id} style={{
+                        background: team.isActive ? 'rgba(20, 10, 5, 0.4)' : 'rgba(139, 0, 0, 0.2)', // Highlight inactive
                         transition: 'all 0.3s ease',
                       }}>
                         <td style={{
@@ -562,6 +785,7 @@ export default function Round1Page() {
                             placeholder="Enter team name"
                             value={team.name}
                             onChange={e => handleChange(team.id, 'name', e.target.value)}
+                            disabled={roundLocked || !team.isActive} // Disable if inactive
                             style={{
                               width: '100%',
                               maxWidth: '300px',
@@ -589,6 +813,7 @@ export default function Round1Page() {
                           <select
                             value={team.house}
                             onChange={e => handleChange(team.id, 'house', e.target.value)}
+                            disabled={roundLocked || !team.isActive} // Disable if inactive
                             style={{
                               padding: '0.7rem 1rem',
                               background: 'rgba(20, 10, 5, 0.8)',
@@ -611,52 +836,72 @@ export default function Round1Page() {
                           </select>
                         </td>
                         <td style={{ padding: '1rem', border: '2px solid #8b4513', textAlign: 'center' }}>
-                          <input
-                            type="number"
-                            value={team.score}
-                            onChange={e => handleChange(team.id, 'score', Number(e.target.value))}
-                            style={{
-                              width: '100px',
-                              padding: '0.7rem',
-                              background: 'rgba(20, 10, 5, 0.8)',
-                              border: '3px solid #8b4513',
-                              borderRadius: '10px',
-                              color: '#ffd700',
-                              fontSize: '1rem',
-                              textAlign: 'center',
-                              outline: 'none',
-                              fontFamily: '"Cinzel", serif',
-                              fontWeight: 700,
-                            }}
-                          />
+                          <span style={{
+                             padding: '0.4rem 1rem',
+                             borderRadius: '999px',
+                             background: team.isActive ? 'rgba(26, 93, 26, 0.7)' : 'rgba(139, 0, 0, 0.7)',
+                             color: team.isActive ? '#90ee90' : '#ff4444',
+                             fontWeight: 700,
+                          }}>
+                              {team.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '1rem', border: '2px solid #8b4513', textAlign: 'center', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                          {team.isActive ? (
+                            <button
+                              onClick={() => handleRemoveTeam(team._id, team.name)}
+                              disabled={roundLocked || !team._id}
+                              style={{ 
+                                padding: '0.5rem 1rem', 
+                                background: '#c41e3a', 
+                                color: '#ffd700', 
+                                border: '1px solid #ffd700', 
+                                borderRadius: '8px', 
+                                cursor: 'pointer', 
+                                fontWeight: 600,
+                                opacity: roundLocked ? 0.5 : 1
+                              }}
+                            >
+                              Remove
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleActivateTeam(team._id, team.name)}
+                              disabled={roundLocked || !team._id}
+                              style={{ 
+                                padding: '0.5rem 1rem', 
+                                background: '#1a5d1a', 
+                                color: '#90ee90', 
+                                border: '1px solid #90ee90', 
+                                borderRadius: '8px', 
+                                cursor: 'pointer', 
+                                fontWeight: 600,
+                                opacity: roundLocked ? 0.5 : 1
+                              }}
+                            >
+                              Activate
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
+                    {/* Show a placeholder row if no teams exist */}
+                    {teams.length === 0 && (
+                        <tr>
+                          <td colSpan={5} style={{ padding: '1rem', border: '2px solid #8b4513', textAlign: 'center', color: '#d4af3780', fontStyle: 'italic' }}>
+                            No teams registered yet. Use the 'Add New Team' button above!
+                          </td>
+                        </tr>
+                    )}
                   </tbody>
                 </table>
                 <div style={{ textAlign: 'center', marginTop: '2rem' }}>
                   <button
-                    onClick={async () => {
-                      try {
-                        setSubmissionStatus('submitting')
-                        const res = await fetch('/api/admin/teams', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ teams }),
-                        })
-                        if (!res.ok) throw new Error('Failed to update teams')
-                        setSubmissionStatus('success')
-                        setTimeout(() => setSubmissionStatus('idle'), 2000)
-                      } catch (err) {
-                        console.error(err)
-                        setSubmissionStatus('error')
-                        setTimeout(() => setSubmissionStatus('idle'), 2000)
-                      }
-                    }}
-                    disabled={submissionStatus === 'submitting'}
+                    onClick={saveAndSubmitTeams}
+                    disabled={submissionStatus === 'submitting' || roundLocked}
                     style={{
                       padding: '1rem 2.5rem',
-                      background: 'linear-gradient(135deg, #8b0000, #c41e3a)',
+                      background: 'linear-gradient(135deg, #c41e3a, #8b0000)',
                       border: '3px solid #ffd700',
                       borderRadius: '12px',
                       color: '#ffd700',
@@ -670,177 +915,34 @@ export default function Round1Page() {
                     }}
                   >
                     {submissionStatus === 'submitting'
-                      ? '🕓 Updating...'
+                      ? '🕓 Updating & Finalizing...'
                       : submissionStatus === 'success'
-                        ? '✅ Updated!'
+                        ? '✅ Updated & Finalized!'
                         : submissionStatus === 'error'
                           ? '❌ Error! Try Again'
-                          : '💾 Update Table'}
+                          : '💾 Save Teams & Finalize Round 1 Setup'}
                   </button>
                 </div>
 
               </div>
             </div>
             
-            {/* Leaderboards */}
+            {/* Informational Note for the user */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(550px, 1fr))',
-              gap: '2.5rem',
-              marginTop: '3rem',
+                background: 'linear-gradient(145deg, rgba(30, 15, 8, 0.5), rgba(15, 7, 4, 0.5))',
+                border: '2px dashed #8b4513',
+                borderRadius: '15px',
+                padding: '2rem',
+                marginTop: '2rem',
+                textAlign: 'center',
             }}>
-              {/* House Championship */}
-              <div style={{
-                background: 'linear-gradient(145deg, rgba(60, 30, 15, 0.98), rgba(30, 15, 8, 0.98))',
-                border: '4px solid #8b4513',
-                borderRadius: '25px',
-                padding: '2.5rem',
-                boxShadow: '0 15px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.3)',
-                animation: 'fadeIn 1.2s ease-out 0.5s backwards',
-              }}>
-                <h2 style={{
-                  fontSize: '1.8rem',
-                  fontWeight: 800,
-                  color: '#ffd700',
-                  marginBottom: '2rem',
-                  textAlign: 'center',
-                  textShadow: '0 4px 20px rgba(255, 215, 0, 0.6)',
-                  letterSpacing: '0.1em',
-                  fontFamily: '"Cinzel", serif',
+                <p style={{
+                    fontSize: '1.1rem',
+                    color: '#d4af37',
+                    fontStyle: 'italic',
                 }}>
-                  🏆 House Championship
-                </h2>
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={houseScores}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#8b4513" strokeOpacity={0.5} />
-                    <XAxis
-                      dataKey="name"
-                      stroke="#d4af37"
-                      style={{
-                        fontSize: '0.95rem',
-                        fontFamily: '"Palatino Linotype", serif',
-                        fontWeight: 600,
-                      }}
-                    />
-                    <YAxis
-                      stroke="#d4af37"
-                      style={{
-                        fontSize: '0.9rem',
-                        fontFamily: '"Cinzel", serif',
-                      }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'rgba(30, 15, 8, 0.98)',
-                        border: '3px solid #8b4513',
-                        borderRadius: '12px',
-                        color: '#ffd700',
-                        fontFamily: '"Palatino Linotype", serif',
-                        fontSize: '1rem',
-                        fontWeight: 600,
-                      }}
-                    />
-                    <Legend
-                      wrapperStyle={{
-                        color: '#ffd700',
-                        fontFamily: '"Cinzel", serif',
-                        fontSize: '0.95rem',
-                      }}
-                    />
-                    <Bar dataKey="total" fill="#ffd700" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Award Quaffle control (admin only) */}
-              <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                <label style={{ color: '#ffd700', marginRight: '0.6rem' }}>Award Quaffle to:</label>
-                <select id="adminAwardHouse" style={{ padding: '0.6rem', borderRadius: '6px', marginRight: '0.6rem', color: 'black' }}>
-                  {houses.map(h => <option key={h} value={h}>{h}</option>)}
-                </select>
-                <button onClick={async () => {
-                  const sel = document.getElementById('adminAwardHouse') as HTMLSelectElement
-                  const house = sel?.value
-                  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-                  await fetch('/api/admin/award-quaffle', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-                    body: JSON.stringify({ house, round: 'round-1' })
-                  })
-                  // Replaced alert with a less intrusive confirmation
-                  console.log('Quaffle awarded to ' + house)
-                  const awardButton = document.querySelector('#adminAwardHouse + button') as HTMLButtonElement
-                  if (awardButton) {
-                    const originalText = awardButton.innerText
-                    awardButton.innerText = 'Awarded! ✓'
-                    awardButton.disabled = true
-                    setTimeout(() => {
-                      awardButton.innerText = originalText
-                      awardButton.disabled = false
-                    }, 2000)
-                  }
-                }} style={{ padding: '0.8rem 1.2rem', borderRadius: '8px', background: '#ffd700' }}>Award</button>
-              </div>
-
-              {/* Team Rankings */}
-              <div style={{
-                background: 'linear-gradient(145deg, rgba(60, 30, 15, 0.98), rgba(30, 15, 8, 0.98))',
-                border: '4px solid #8b4513',
-                borderRadius: '25px',
-                padding: '2.5rem',
-                boxShadow: '0 15px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.3)',
-                animation: 'fadeIn 1.2s ease-out 0.7s backwards',
-              }}>
-                <h2 style={{
-                  fontSize: '1.8rem',
-                  fontWeight: 800,
-                  color: '#ffd700',
-                  marginBottom: '2rem',
-                  textAlign: 'center',
-                  textShadow: '0 4px 20px rgba(255, 215, 0, 0.6)',
-                  letterSpacing: '0.1em',
-                  fontFamily: '"Cinzel", serif',
-                }}>
-                  ⚡ Team Rankings
-                </h2>
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={teamScores}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#8b4513" strokeOpacity={0.5} />
-                    <XAxis
-                      dataKey="name"
-                      interval={0}
-                      angle={-45}
-                      textAnchor="end"
-                      height={100}
-                      stroke="#d4af37"
-                      style={{
-                        fontSize: '0.8rem',
-                        fontFamily: '"Palatino Linotype", serif',
-                        fontWeight: 600,
-                      }}
-                    />
-                    <YAxis
-                      stroke="#d4af37"
-                      style={{
-                        fontSize: '0.9rem',
-                        fontFamily: '"Cinzel", serif',
-                      }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'rgba(30, 15, 8, 0.98)',
-                        border: '3px solid #8b4513',
-                        borderRadius: '12px',
-                        color: '#ffd700',
-                        fontFamily: '"Palatino Linotype", serif',
-                        fontSize: '1rem',
-                        fontWeight: 600,
-                      }}
-                    />
-                    <Bar dataKey="score" fill="#c9a52a" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+                    Note: This round (Sorting Hat Ceremony) is for **Team and House Setup** only. Score entry, Quaffle awarding, and detailed visualizations are **disabled** here as requested. All **active** teams will be registered with 0 points for the start of the tournament.
+                </p>
             </div>
           </>
         )}
