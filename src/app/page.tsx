@@ -352,10 +352,10 @@ export default function HomePage() {
         {/* --- House Virtues Section (Snap Point 3) --- */}
         <section
           ref={trialsRef}
-          className="min-h-screen snap-start flex flex-col items-center justify-start relative z-20 p-4 sm:p-6 md:p-8 overflow-hidden"
+          className="min-h-screen snap-start flex flex-col items-center justify-center relative z-20 p-4 pb-16 sm:p-6 md:p-8 overflow-hidden"
         >
           <motion.div
-            className="w-full flex flex-col items-center pt-8 sm:pt-12"
+            className="w-full flex flex-col items-center gap-8 sm:gap-12"
             variants={sectionFadeIn}
             initial="hidden"
             whileInView="visible"
@@ -370,10 +370,10 @@ export default function HomePage() {
             </motion.h2>
 
             {/* Banners Grid */}
-            <div className="w-full max-w-7xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 px-2">
+            <div className="w-full max-w-7xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 px-2 mb-2 sm:mb-4">
               {/* Gryffindor Banner */}
               <motion.div
-                className="h-48 sm:h-56 md:h-64 rounded-lg border-2 sm:border-4 border-red-800/50 shadow-2xl p-3 sm:p-4 flex flex-col justify-between text-center relative overflow-hidden group"
+                className="h-36 sm:h-44 md:h-52 rounded-lg border-2 sm:border-4 border-red-800/50 shadow-2xl p-3 sm:p-4 flex flex-col justify-between text-center relative overflow-hidden group"
                 whileHover={{ scale: 1.05, shadow: '0 0 30px rgba(185, 28, 28, 0.7)' }}
                 style={{ y: trialBannerY(0) }}
                 variants={itemFadeIn}
@@ -466,7 +466,7 @@ export default function HomePage() {
             </div>
 
             {/* --- Start Trial Button with Decorative Elements --- */}
-            <div className="relative w-full flex justify-center items-center mt-2 sm:mt-4">
+            <div className="relative w-full flex justify-center items-center mt-0 mb-16 sm:mb-24">
               {/* Left Line - Hidden on mobile */}
               <div className="absolute left-0 w-1/3 hidden sm:flex items-center">
                 <div className="h-[2px] flex-grow bg-gradient-to-r from-transparent to-amber-400"></div>
@@ -487,7 +487,7 @@ export default function HomePage() {
                             rounded-md relative z-10 
                             border-2 border-amber-400
                             uppercase tracking-wider overflow-hidden
-                            scale-75 sm:scale-100"
+                            scale-90 sm:scale-100"
                   initial="initial"
                   animate="animate"
                 >
