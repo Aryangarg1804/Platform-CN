@@ -8,7 +8,7 @@ export async function GET() {
     const round = await Round.findOne({ name: 'round-2' })
       .populate({
         path: 'results.teams',
-        select: 'name house potionCreatedRound2',
+        select: 'name house totalPoints potionCreatedRound2',
         // populate the team's potionCreatedRound2 directly so we can return the potion name
         populate: { path: 'potionCreatedRound2', select: 'name', model: 'Potion' }
       })
@@ -21,6 +21,7 @@ export async function GET() {
         _id: t?._id?.toString(),
         name: t?.name,
         house: t?.house,
+        totalPoints: t?.totalPoints || 0,
         potionCreatedName: t?.potionCreatedRound2 ? (t.potionCreatedRound2.name || null) : null
       }));
       const potionCreated = r.potionCreatedId ? { _id: r.potionCreatedId._id?.toString(), name: r.potionCreatedId.name } : null;

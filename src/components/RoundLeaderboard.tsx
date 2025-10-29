@@ -95,32 +95,25 @@ export default function RoundLeaderboard({ roundNumber }: RoundLeaderboardProps)
           
           if (config.type === 'team' && data.round?.results) {
               if (roundNumber === 2) {
-                  // Special handling for Round 2's pair-based results
-                  const teamScores = new Map<string, { score: number, time: number, house: string, name: string }>();
-                  
-                  // Process pair results
+                  // Get all unique teams and their totalPoints from the results
+                  const uniqueTeams = new Map();
                   data.round.results.forEach((r: any) => {
-                      // Each result has two teams that get the same points
                       r.teams?.forEach((team: any) => {
                           if (!team) return;
-                          const currentScore = teamScores.get(team._id) || { score: 0, time: 0, house: team.house, name: team.name };
-                          teamScores.set(team._id, {
-                              score: currentScore.score + (r.points || 0),
-                              time: currentScore.time + (r.time || 0),
-                              house: team.house,
-                              name: team.name
-                          });
+                          // Only update if we haven't seen this team before
+                          if (!uniqueTeams.has(team._id)) {
+                              uniqueTeams.set(team._id, {
+                                  teamName: team.name,
+                                  house: team.house,
+                                  score: team.totalPoints || 0,
+                                  subScore: 0 // Time is not relevant for total points display
+                              });
+                          }
                       });
                   });
 
-                  // Convert Map to array and sort by score
-                  const sortedTeams = Array.from(teamScores.entries())
-                      .map(([id, data]) => ({
-                          teamName: data.name,
-                          house: data.house,
-                          score: data.score,
-                          subScore: data.time
-                      }))
+                  // Convert to array and sort by totalPoints
+                  const sortedTeams = Array.from(uniqueTeams.values())
                       .sort((a, b) => b.score - a.score)
                       .map((team, index) => ({ ...team, rank: index + 1 }));
 
