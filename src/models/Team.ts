@@ -1,20 +1,21 @@
-import mongoose, { Schema, Document } from 'mongoose'
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
 // Define the ITeam interface for type safety (must be exported)
 export interface ITeam extends Document { 
     name: string;
     house: 'Gryffindor' | 'Hufflepuff' | 'Ravenclaw' | 'Slytherin';
     totalPoints: number;
-    score: number;
+    score: number; // This remains from your original schema
     roundsParticipating: number[];
     isActive: boolean;
     isEliminated: boolean;
+    potionCreatedRound2?: Types.ObjectId | null; // <-- ADDED FIELD
 }
 
 // Define schema for a team (single source of truth)
-const TeamSchema = new Schema(
+const TeamSchema = new Schema<ITeam>(
   {
-    name: { type: String, required: true },
+    name: { type: String, required: true, unique: true }, // Make name unique
     house: {
       type: String,
       required: true,
@@ -30,11 +31,19 @@ const TeamSchema = new Schema(
     isActive: { type: Boolean, default: true },
     // explicit eliminated flag for clarity
     isEliminated: { type: Boolean, default: false },
+    
+    // --- ADD THIS FIELD ---
+    potionCreatedRound2: {
+        type: Schema.Types.ObjectId,
+        ref: 'Potion', // This links it to your Potion model
+        required: false,
+        default: null
+    }
   },
   {
     timestamps: true,
   }
-)
+);
 
 // Prevent model overwrite on hot reload in Next.js
-export default mongoose.models.Team || mongoose.model<ITeam>('Team', TeamSchema)
+export default mongoose.models.Team || mongoose.model<ITeam>('Team', TeamSchema);

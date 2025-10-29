@@ -1,261 +1,187 @@
-// import { NextRequest, NextResponse } from "next/server";
-// import { connectDB } from "@/lib/mongoose";
-// import Team from "@/models/Team";
-// import { Types } from "mongoose";
-
-// // -------------------- POST --------------------
-// // -------------------- POST --------------------
-// export async function POST(req: NextRequest) {
-//   try {
-//     await connectDB();
-
-//     const data = await req.json();
-//     const teamsArray = Array.isArray(data.teams) ? data.teams : data;
-
-//     console.log("🟡 Incoming teams:", teamsArray);
-
-//     if (!Array.isArray(teamsArray)) {
-//       return NextResponse.json(
-//         { error: "Expected array of teams" },
-//         { status: 400 }
-//       );
-//     }
-
-//     for (const team of teamsArray) {
-//       const existingTeam = await Team.findOne({ name: team.name });
-
-//       const currentPoints = existingTeam?.totalPoints || 0;
-//       const addedScore = team.score ?? 0;
-
-//       await Team.findOneAndUpdate(
-//         { name: team.name },
-//         {
-//           $set: {
-//             name: team.name,
-//             house: team.house,
-//             roundsParticipating: team.roundsParticipating || [1, 2, 3, 4],
-//             isActive: team.isActive !== false,
-//           },
-//           $inc: {
-//             totalPoints: team.score ?? 0, // ✅ Add score to total points
-//           },
-//         },
-//         { upsert: true, new: true }
-//       );
-//     }
-
-//     const allTeams = await Team.find({});
-//     return NextResponse.json({ success: true, teams: allTeams });
-//   } catch (err) {
-//     console.error("❌ POST /api/admin/teams error details:", err);
-//     return NextResponse.json({ error: String(err) }, { status: 500 });
-//   }
-// }
-
-// // -------------------- GET --------------------
-// export async function GET(req: NextRequest) {
-//   try {
-//     await connectDB();
-//     const searchParams = new URL(req.url).searchParams;
-//     const round = searchParams.get("round");
-//     const house = searchParams.get("house");
-
-//     let query: any = {};
-//     if (round) query.roundsParticipating = Number(round);
-//     if (house) query.house = house;
-
-//     const teams = await Team.find(query)
-//       .sort({ isActive: -1, house: 1, name: 1 })
-//       .exec();
-
-//     return NextResponse.json(teams);
-//   } catch (err) {
-//     console.error("GET /api/admin/teams error:", err);
-//     return NextResponse.json(
-//       { error: "Failed to fetch teams" },
-//       { status: 500 }
-//     );
-//   }
-// }
-
-// // -------------------- DELETE --------------------
-// export async function DELETE(req: NextRequest) {
-//   try {
-//     await connectDB();
-
-//     const data = await req.json();
-//     const { teamId } = data;
-
-//     if (!teamId) {
-//       return NextResponse.json({ error: "Missing teamId" }, { status: 400 });
-//     }
-
-//     const result = await Team.findByIdAndUpdate(teamId, { isActive: false });
-//     if (!result) {
-//       return NextResponse.json({ error: "Team not found" }, { status: 404 });
-//     }
-
-//     return NextResponse.json({ success: true });
-//   } catch (err) {
-//     console.error("DELETE /api/admin/teams error:", err);
-//     if ((err as Error).name === "CastError") {
-//       return NextResponse.json(
-//         { error: "Invalid teamId format" },
-//         { status: 400 }
-//       );
-//     }
-//     return NextResponse.json(
-//       { error: "Failed to delete team" },
-//       { status: 500 }
-//     );
-//   }
-// }
-
-
-
-
+// src/app/api/admin/teams/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongoose";
-import Team from "@/models/Team";
+import Team, { ITeam } from "@/models/Team"; // Import ITeam interface
+import Potion from "@/models/Potion";
 import { Types } from "mongoose";
 
-// -------------------- POST --------------------
-// Handles both:
-// 1. Updating existing teams by _id (for name/house changes from R1).
-// 2. Upserting new teams by name (for adding a new team).
-// 3. Incrementing score (for later rounds, e.g., R2, R3, etc.)
+// --- POST Handler (Handles Updates including Score Increment and Potion Assignment) ---
 export async function POST(req: NextRequest) {
   try {
     await connectDB();
+    // TODO: Add robust admin authorization check here using getUserFromHeader if needed
 
     const data = await req.json();
-    // Normalize data: client sends array of objects, either as `data` or `data.teams`
-    const teamsArray = Array.isArray(data.teams) ? data.teams : data;
+    const teamsArray = Array.isArray(data) ? data : [data];
 
-    if (!Array.isArray(teamsArray)) {
-      return NextResponse.json(
-        { error: "Expected array of teams" },
-        { status: 400 }
-      );
+    console.log("🟡 Incoming teams update:", teamsArray);
+
+    if (!Array.isArray(teamsArray) || teamsArray.length === 0) {
+      return NextResponse.json( { error: "Expected an array of teams or a single team object" }, { status: 400 } );
     }
 
-    for (const team of teamsArray) {
-      if (!team.name || !team.house) continue; // Skip invalid entries
+    const updatedTeamIds = [];
+    const potionCountAdjustments: { [potionId: string]: number } = {};
 
-      // 1. Determine the filter and upsert strategy.
-      // Use _id for filtering if present (for updates to existing teams).
-      // Otherwise, use name for upserting (for new teams).
-      const filter: any = team._id 
-        ? { _id: team._id } 
-        : { name: team.name };
-      
-      const isUpsert = !team._id; 
-      let options: any = { new: true }; // Always return new document
-
-      // If we are upserting (creating new), enable the upsert option
-      if (isUpsert) {
-          options.upsert = true;
+    for (const teamUpdate of teamsArray) {
+      if (!teamUpdate._id) {
+          console.warn("Skipping team update: Missing _id.", teamUpdate);
+          continue;
       }
-      
-      // 2. Prepare the update fields (for $set)
-      const setFields: any = {
-          name: team.name,
-          house: team.house,
-          // Ensure roundsParticipating is saved if provided, otherwise the schema default is used.
-          roundsParticipating: team.roundsParticipating || [1, 2, 3, 4],
-          isActive: team.isActive !== false,
-      };
+      // Ensure teamId is a valid ObjectId before proceeding
+      let teamId: Types.ObjectId;
+      try {
+          teamId = new Types.ObjectId(teamUpdate._id);
+      } catch (e) {
+          console.warn(`Skipping team update: Invalid _id format "${teamUpdate._id}".`);
+          continue;
+      }
 
-      // 3. Prepare the final update object ($set, $inc, $setOnInsert)
-      const updateObject: any = {
-          $set: setFields
-      };
 
-      // 4. Handle score update ($inc) for later rounds.
-      // Only use $inc if score is explicitly greater than 0.
-      if (typeof team.score === 'number' && team.score > 0) {
-          updateObject.$inc = { totalPoints: team.score };
-      } 
-      
-      // 5. Use $setOnInsert to ensure fields are correctly initialized only on creation.
-      if (isUpsert) {
-         updateObject.$setOnInsert = {
-            totalPoints: 0,
-            score: 0,
-            isEliminated: false,
+      // --- Prepare update operations ---
+      const updateOps: any = { $set: {}, $inc: {} };
+      let newPotionIdStr: string | null | undefined = undefined; // Use undefined to track if it was in payload
+
+      // Fields to potentially set ($set)
+      if (teamUpdate.name !== undefined) updateOps.$set.name = teamUpdate.name;
+      if (teamUpdate.house !== undefined) updateOps.$set.house = teamUpdate.house;
+      if (teamUpdate.isActive !== undefined) updateOps.$set.isActive = teamUpdate.isActive;
+      if (teamUpdate.isEliminated !== undefined) updateOps.$set.isEliminated = teamUpdate.isEliminated;
+
+      // Special handling for potionCreatedRound2
+      if (teamUpdate.potionCreatedRound2 !== undefined) {
+         if (teamUpdate.potionCreatedRound2 === null || teamUpdate.potionCreatedRound2 === "") {
+             updateOps.$set.potionCreatedRound2 = null;
+             newPotionIdStr = null;
+         } else {
+             try {
+                const potionObjectId = new Types.ObjectId(teamUpdate.potionCreatedRound2);
+                updateOps.$set.potionCreatedRound2 = potionObjectId;
+                newPotionIdStr = potionObjectId.toString();
+             } catch (e) {
+                console.error(`Invalid potionCreatedRound2 ObjectId "${teamUpdate.potionCreatedRound2}" for team ${teamId}. Skipping field.`);
+             }
          }
       }
 
-      await Team.findOneAndUpdate(
-        filter,
-        updateObject,
-        options
-      );
-    }
+      // Field to increment ($inc) - use 'score' from payload for points added this round
+      if (teamUpdate.score !== undefined && typeof teamUpdate.score === 'number' && teamUpdate.score !== 0) {
+        updateOps.$inc.totalPoints = teamUpdate.score;
+      }
 
-    const allTeams = await Team.find({});
+      // --- Clean up empty update operators ---
+      if (Object.keys(updateOps.$set).length === 0) delete updateOps.$set;
+      if (Object.keys(updateOps.$inc).length === 0) delete updateOps.$inc;
+
+      // --- Execute update only if there's something to change ---
+      if (updateOps.$set || updateOps.$inc) {
+
+         // --- Calculate Potion Count Adjustments (Fetch old state BEFORE update) ---
+         if (newPotionIdStr !== undefined) { // Check if potion field was part of the update request
+             // FIX: Explicitly type the result of lean()
+             const oldTeam = await Team.findById(teamId, 'potionCreatedRound2')
+                                       .lean<{ potionCreatedRound2?: Types.ObjectId | null }>();
+
+             const oldPotionIdStr = oldTeam?.potionCreatedRound2?.toString() || null;
+
+             // Decrement count for the old potion if it changed and wasn't null
+             if (oldPotionIdStr && oldPotionIdStr !== newPotionIdStr) {
+                 potionCountAdjustments[oldPotionIdStr] = (potionCountAdjustments[oldPotionIdStr] || 0) - 1;
+             }
+             // Increment count for the new potion if it changed and isn't null
+             if (newPotionIdStr && newPotionIdStr !== oldPotionIdStr) {
+                 potionCountAdjustments[newPotionIdStr] = (potionCountAdjustments[newPotionIdStr] || 0) + 1;
+             }
+         }
+
+          // --- Perform the Team Update ---
+          const updatedTeam = await Team.findByIdAndUpdate(teamId, updateOps, { new: true });
+          if (updatedTeam) {
+            updatedTeamIds.push(updatedTeam._id);
+          } else {
+              console.warn(`Team with _id ${teamId} not found during update.`);
+          }
+      } else {
+          console.log(`No update operations for team ${teamId}. Skipping.`);
+      }
+    } // End loop through teamsArray
+
+     // --- Update Potion Counts in DB using bulkWrite ---
+     const potionBulkOps = Object.entries(potionCountAdjustments)
+        .filter(([potionId, change]) => change !== 0)
+        .map(([potionId, change]) => ({
+            updateOne: {
+                filter: { _id: new Types.ObjectId(potionId) },
+                update: { $inc: { numberOfTimesCreated: change } }
+            }
+        }));
+
+     if (potionBulkOps.length > 0) {
+        try {
+            const bulkResult = await Potion.bulkWrite(potionBulkOps);
+            console.log("🧪 Potion count update result:", bulkResult);
+        } catch(potionUpdateError) {
+            console.error("❌ Error updating potion counts:", potionUpdateError);
+            // Optionally return partial success or specific error here
+        }
+     }
+
+    // Fetch and return all teams after updates for confirmation
+    const allTeams = await Team.find({}).sort({ name: 1 });
     return NextResponse.json({ success: true, teams: allTeams });
-  } catch (err) {
-    console.error("❌ POST /api/admin/teams error details:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+
+  } catch (err: any) {
+    console.error("❌ POST /api/admin/teams error:", err);
+    if (err.name === 'ValidationError') {
+        return NextResponse.json({ error: "Validation failed", details: err.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: `Server error: ${err.message}` }, { status: 500 });
   }
 }
 
-// -------------------- GET --------------------
+// --- GET Handler (Fetch teams, optionally filtered by round) ---
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
     const searchParams = new URL(req.url).searchParams;
-    const round = searchParams.get("round");
+    const roundParam = searchParams.get("round");
     const house = searchParams.get("house");
 
-    let query: any = {};
-    if (round) query.roundsParticipating = Number(round);
+    let query: any = { isActive: true }; // Default to active teams
+    if (roundParam) {
+        const roundNumber = parseInt(roundParam, 10);
+        if (!isNaN(roundNumber)) { query.roundsParticipating = roundNumber; }
+        else { console.warn(`Invalid round parameter: ${roundParam}. Fetching all active teams.`); }
+    }
     if (house) query.house = house;
 
-    const teams = await Team.find(query)
-      .sort({ isActive: -1, house: 1, name: 1 })
-      .exec();
+    const teams = await Team.find(query).sort({ house: 1, name: 1 }).lean().exec();
+    return NextResponse.json(teams); // Return the array directly
 
-    return NextResponse.json(teams);
   } catch (err) {
     console.error("GET /api/admin/teams error:", err);
-    return NextResponse.json(
-      { error: "Failed to fetch teams" },
-      { status: 500 }
-    );
+    return NextResponse.json( { error: "Failed to fetch teams" }, { status: 500 } );
   }
 }
 
-// -------------------- DELETE --------------------
+// --- DELETE Handler (Mark team as inactive) ---
 export async function DELETE(req: NextRequest) {
   try {
     await connectDB();
-
+    // TODO: Add robust admin authorization check here
     const data = await req.json();
     const { teamId } = data;
+    if (!teamId) return NextResponse.json({ error: "Missing teamId" }, { status: 400 });
 
-    if (!teamId) {
-      return NextResponse.json({ error: "Missing teamId" }, { status: 400 });
-    }
+    const result = await Team.findByIdAndUpdate(teamId, { isActive: false }, { new: true });
+    if (!result) return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    const result = await Team.findByIdAndUpdate(teamId, { isActive: false });
-    if (!result) {
-      return NextResponse.json({ error: "Team not found" }, { status: 404 });
-    }
+    console.log(`Team ${teamId} marked as inactive.`);
+    return NextResponse.json({ success: true, team: result });
 
-    return NextResponse.json({ success: true });
-  } catch (err) {
+  } catch (err: any) {
     console.error("DELETE /api/admin/teams error:", err);
-    if ((err as Error).name === "CastError") {
-      return NextResponse.json(
-        { error: "Invalid teamId format" },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { error: "Failed to delete team" },
-      { status: 500 }
-    );
+    if (err.name === "CastError") { return NextResponse.json( { error: "Invalid teamId format" }, { status: 400 } ); }
+    return NextResponse.json( { error: "Failed to mark team as inactive" }, { status: 500 } );
   }
 }
