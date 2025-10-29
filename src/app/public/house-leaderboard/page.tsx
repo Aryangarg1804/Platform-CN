@@ -1,6 +1,7 @@
 "use client"
 import React, { useEffect, useState } from 'react'
 
+// LeaderboardCard Component (Keep this component as it's used for Quaffles)
 function LeaderboardCard({ title, items }: { title: string; items: any[] }) {
   return (
     <div
@@ -28,26 +29,31 @@ function LeaderboardCard({ title, items }: { title: string; items: any[] }) {
       <div className="w-20 sm:w-24 h-1 bg-gradient-to-r from-transparent via-[#D3A625] to-transparent mx-auto mb-6"></div>
 
       <div className="space-y-3 sm:space-y-4">
-        {items.map((item, idx) => (
-          <div
-            key={idx}
-            className="bg-[#0E1A40]/60 border-2 border-[#5D5D5D] rounded-lg p-3 sm:p-4 md:p-5 hover:border-[#4169E1] transition-all duration-300 hover:shadow-[0_0_15px_rgba(65,105,225,0.4)]"
-          >
-            <div className="flex justify-between items-center flex-wrap gap-2 sm:gap-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <span className="text-[#ECB939] font-bold text-lg sm:text-xl w-6 sm:w-8 text-center">
-                  #{idx + 1}
-                </span>
-                <span className="text-[#AAAAAA] font-semibold text-base sm:text-lg truncate max-w-[160px] sm:max-w-[200px] md:max-w-[250px]">
-                  {item.house}
-                </span>
+        {items.length === 0 ? (
+           <p className="text-center text-amber-500/70 italic mt-6">No data available yet.</p>
+        ) : (
+             items.map((item, idx) => (
+              <div
+                key={idx}
+                className="bg-[#0E1A40]/60 border-2 border-[#5D5D5D] rounded-lg p-3 sm:p-4 md:p-5 hover:border-[#4169E1] transition-all duration-300 hover:shadow-[0_0_15px_rgba(65,105,225,0.4)]"
+              >
+                <div className="flex justify-between items-center flex-wrap gap-2 sm:gap-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-[#ECB939] font-bold text-lg sm:text-xl w-6 sm:w-8 text-center">
+                      #{idx + 1}
+                    </span>
+                    <span className="text-[#AAAAAA] font-semibold text-base sm:text-lg truncate max-w-[160px] sm:max-w-[200px] md:max-w-[250px]">
+                      {item.house}
+                    </span>
+                  </div>
+                  <span className="text-[#4169E1] font-bold text-lg sm:text-xl md:text-2xl">
+                    {/* Display quaffles count */}
+                    {item.quaffles}
+                  </span>
+                </div>
               </div>
-              <span className="text-[#4169E1] font-bold text-lg sm:text-xl md:text-2xl">
-                {item.totalScore !== undefined ? item.totalScore : item.quaffles}
-              </span>
-            </div>
-          </div>
-        ))}
+            ))
+        )}
       </div>
     </div>
   )
@@ -62,9 +68,12 @@ export default function HouseLeaderboardPage() {
       try {
         const res = await fetch('/api/leaderboard')
         const data = await res.json()
-        setHouses(data.houseScores || [])
+        // Sort houses by quaffles (descending) before setting state
+        const sortedByQuaffles = (data.houseScores || []).sort((a: any, b: any) => (b.quaffles || 0) - (a.quaffles || 0));
+        setHouses(sortedByQuaffles)
       } catch (err) {
         console.error(err)
+        // Optionally set an error state here
       } finally {
         setLoading(false)
       }
@@ -103,7 +112,7 @@ export default function HouseLeaderboardPage() {
       </div>
 
       <div className="relative z-10 px-4 sm:px-6 md:px-10 lg:px-16 py-10 sm:py-14 md:py-20">
-        <div className="max-w-6xl mx-auto text-center">
+        <div className="max-w-3xl mx-auto text-center"> {/* Adjusted max-width */}
           {/* Header */}
           <header className="mb-10 sm:mb-12 md:mb-16">
             <div className="animate-float-gentle inline-block mb-4 sm:mb-6">
@@ -120,29 +129,24 @@ export default function HouseLeaderboardPage() {
             <div className="w-28 sm:w-32 h-1 bg-gradient-to-r from-transparent via-[#D3A625] to-transparent mx-auto mb-4 sm:mb-6"></div>
 
             <p className="text-[#AAAAAA] text-base sm:text-lg italic leading-relaxed">
-              The magical standings of all competing houses
+              The magical standings based on Quaffles earned
             </p>
             <p className="text-[#5D5D5D] text-xs sm:text-sm mt-2">
-              Total scores and quaffles earned through valor and wisdom
+              Quaffles earned through valor and wisdom in each round
             </p>
           </header>
 
-          {/* Leaderboard Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mb-8">
-            <LeaderboardCard
-              title="House Standings"
-              items={houses.map((h: any) => ({
-                house: h.house,
-                totalScore: h.totalScore,
-              }))}
-            />
-            <LeaderboardCard
-              title="House Quaffles"
-              items={houses.map((h: any) => ({
-                house: h.house,
-                quaffles: h.quaffles,
-              }))}
-            />
+          {/* Leaderboard Grid - Now only displays Quaffles */}
+          <div className="mb-8 flex justify-center"> {/* Centering the single card */}
+            <div className="w-full max-w-lg"> {/* Control width of the card */}
+                 <LeaderboardCard
+                  title="House Quaffles"
+                  items={houses.map((h: any) => ({ // Ensure items array has objects with house and quaffles
+                    house: h.house,
+                    quaffles: h.quaffles ?? 0, // Use nullish coalescing for safety
+                  }))}
+                />
+            </div>
           </div>
 
           {/* Footer */}
