@@ -1,10 +1,10 @@
 // src/app/ClientRootLayout.tsx (This is the Client Component)
-'use client' 
+'use client'
 
 import './globals.css'
 import React, { useState } from 'react'
-
-// ❌ REMOVE THE 'export const metadata' BLOCK FROM HERE
+import Image from 'next/image'; // Import the next/image component
+import cnLogo from '/public/images/cn_logo.png' // Correctly import the image (assuming cn_logo.png is the one)
 
 export default function ClientRootLayout({ children }: { children: React.ReactNode }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -16,13 +16,24 @@ export default function ClientRootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <head>
+        {/* Head elements */}
       </head>
       <body>
         <header className="header-bg w-full py-4 px-6">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
-            
+
             <div className="flex items-center gap-4">
-              <div className="text-2xl font-['Cinzel'] text-amber-300">⚡ Platform 9¾</div>
+              {/* Correctly use the Image component */}
+              <div className="flex items-center text-2xl font-['Cinzel'] text-amber-300">
+                  <Image
+                    src={cnLogo} // Use the imported image object
+                    alt="Coding Ninjas Logo"
+                    width={35} // Specify width
+                    height={35} // Specify height
+                    className="mr-2" // Add some margin if needed
+                  />
+                 Platform 9¾
+               </div>
               <div className="text-sm text-amber-200 hidden sm:block">Hogwarts Tournament</div>
             </div>
 
