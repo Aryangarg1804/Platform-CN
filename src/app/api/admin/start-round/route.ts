@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/mongoose'
 import Team from '@/models/Team'
 import HouseLeaderboard from '@/models/HouseLeaderboard'
+import Log from '@/models/Log'
 import { getUserFromHeader } from '@/lib/roundHeadAuth'
 
 // Helper to shuffle array
@@ -61,6 +62,14 @@ export async function POST(req: NextRequest) {
         await HouseLeaderboard.findOneAndUpdate({ house: h }, { $setOnInsert: { house: h, totalScore: 0, quaffles: 0 } }, { upsert: true })
       }
 
+      // log start by admin
+      try {
+        const authHeader = (req as any).headers?.get?.('authorization')
+        const user = getUserFromHeader(authHeader)
+        const msg = `${user?.email || 'unknown'} started ${round}, eliminated ${elimIds.length} teams, survivors ${survivorIds.length}`
+        await new Log({ message: msg, senderEmail: user?.email, round, meta: { eliminated: elimIds.length, survivors: survivorIds.length } }).save()
+      } catch (e) { console.error('Failed to create log for start-round', e) }
+
       return NextResponse.json({ success: true, eliminated: elimIds.length, survivors: survivorIds.length })
     }
 
@@ -69,6 +78,13 @@ export async function POST(req: NextRequest) {
     const rn = roundNumberMatch ? Number(roundNumberMatch[1]) : null
     if (rn) {
       await Team.updateMany({ isActive: true }, { $addToSet: { roundsParticipating: rn } }).exec()
+      try {
+        const authHeader = (req as any).headers?.get?.('authorization')
+        const user = getUserFromHeader(authHeader)
+        const msg = `${user?.email || 'unknown'} started round ${rn}`
+        await new Log({ message: msg, senderEmail: user?.email, round: `round-${rn}`, meta: { roundNumber: rn } }).save()
+      } catch (e) { console.error('Failed to create log for start-round', e) }
+
       return NextResponse.json({ success: true, message: `Round ${rn} started` })
     }
 

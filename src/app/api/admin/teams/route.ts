@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongoose";
 import Team, { ITeam } from "@/models/Team"; // Import ITeam interface
 import Potion from "@/models/Potion";
+import Log from '@/models/Log';
 import { Types } from "mongoose";
 
 // --- POST Handler (Handles Updates including Score Increment and Potion Assignment) ---
@@ -98,6 +99,21 @@ export async function POST(req: NextRequest) {
           const updatedTeam = await Team.findByIdAndUpdate(teamId, updateOps, { new: true });
           if (updatedTeam) {
             updatedTeamIds.push(updatedTeam._id);
+              // If points were added, create a log entry
+              try {
+                if (updateOps.$inc && typeof updateOps.$inc.totalPoints === 'number' && updateOps.$inc.totalPoints !== 0) {
+                  const authHeader = (req as any).headers?.get?.('authorization')
+                  let senderEmail = undefined
+                  try {
+                    const { getUserFromHeader } = await import('@/lib/roundHeadAuth')
+                    const user = getUserFromHeader(authHeader)
+                    senderEmail = user?.email
+                  } catch (e) {}
+                  const points = updateOps.$inc.totalPoints
+                  const msg = `${senderEmail || 'unknown'} added ${points} points to team ${updatedTeam.name}`
+                  await new Log({ message: msg, senderEmail, round: teamUpdate.round, points, meta: { teamId: updatedTeam._id } }).save()
+                }
+              } catch (e) { console.error('Failed to create log for team update', e) }
           } else {
               console.warn(`Team with _id ${teamId} not found during update.`);
           }
