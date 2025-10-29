@@ -3,6 +3,8 @@ import { connectDB } from '@/lib/mongoose'
 import Team from '@/models/Team' //
 import HouseLeaderboard from '@/models/HouseLeaderboard' //
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     await connectDB() //
