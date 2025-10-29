@@ -6,6 +6,7 @@ export interface IRoundResultPair {
   teams: [Types.ObjectId, Types.ObjectId]; // Array containing two Team ObjectIds
   potionCreatedId?: Types.ObjectId | null; // Reference to the Potion ID
   points: number; // Points awarded for this action
+  score?: number; // Optional score field (alias/aggregate of points)
   time: number;   // Time taken for this action
 }
 
@@ -14,6 +15,7 @@ export interface IRoundResult {
   team: Types.ObjectId;
   points: number;
   time: number;
+  score?: number;
   rank: number;
 }
 
@@ -32,8 +34,16 @@ export interface IRound extends Document {
 const RoundSchema = new Schema<IRound>({
   roundNumber: { type: Number, required: true, unique: true },
   name: { type: String, required: true, unique: true },
-  // Use 'Mixed' to allow different objects in the array (pairs for R2, singles for R1)
-  results: [Schema.Types.Mixed], 
+  // Flexible results array that can hold different shapes (round1 vs round2)
+  results: [{
+    teams: [{ type: Schema.Types.ObjectId, ref: 'Team' }],
+    potionCreatedId: { type: Schema.Types.ObjectId, ref: 'Potion' },
+    points: { type: Number, default: 0 },
+    score: { type: Number, default: 0 },
+    time: { type: Number, default: 0 },
+    team: { type: Schema.Types.ObjectId, ref: 'Team' },
+    rank: { type: Number }
+  }],
   isLocked: { type: Boolean, default: true }, // Default to locked
   quaffleWinnerHouse: { type: String, required: false },
 }, { timestamps: true });

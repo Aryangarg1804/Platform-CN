@@ -34,6 +34,7 @@ export default function Round2() {
   const [user, setUser] = useState<any>(null);
   const [teams, setTeams] = useState<TeamScore[]>([]);
   const [potions, setPotions] = useState<Potion[]>([]);
+  const [savedPairs, setSavedPairs] = useState<any[]>([]);
   const [roundLocked, setRoundLocked] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false); // For saving round data
@@ -48,6 +49,14 @@ export default function Round2() {
   const [currentIngredientName, setCurrentIngredientName] = useState('');
   const [currentIngredientHint, setCurrentIngredientHint] = useState('');
   const [addingPotion, setAddingPotion] = useState(false); // For add potion saving state
+
+  // Pair submission state
+  const [selectedTeam1, setSelectedTeam1] = useState<string>('');
+  const [selectedTeam2, setSelectedTeam2] = useState<string>('');
+  const [selectedPotionPair, setSelectedPotionPair] = useState<string>('');
+  const [pairPoints, setPairPoints] = useState<number | ''>('');
+  const [pairTime, setPairTime] = useState<number | ''>('');
+  const [savingPair, setSavingPair] = useState(false);
 
   // --- Authentication Check ---
   useEffect(() => {
@@ -81,10 +90,11 @@ export default function Round2() {
     const previousTeamState = new Map(teams.map(t => [t._id, { score: t.score, time: t.time, potionCreatedRound2: t.potionCreatedRound2 }]));
 
     try {
-      const [statusRes, allTeamsRes, potionsRes] = await Promise.all([
+      const [statusRes, allTeamsRes, potionsRes, savedPairsRes] = await Promise.all([
         fetch('/api/admin/round-status?round=round-2'),
         fetch('/api/admin/teams?round=2'), // Fetch teams participating in round 2
-        fetch('/api/admin/potions')
+        fetch('/api/admin/potions'),
+        fetch('/api/rounds/round-2') // Fetch saved pair results
       ]);
 
       // Process Status
@@ -133,6 +143,15 @@ export default function Round2() {
          setPotions([]);
          // Set general message, avoid overwriting critical errors if possible
          setMessage(prev => ({ text: (prev.text + (potionsRes.status === 404 ? ' Potion API missing.' : ' Failed potions load.')).trim(), type: 'error'}));
+      }
+
+      // Process saved pairs
+      if (savedPairsRes.ok) {
+        const savedData = await savedPairsRes.json();
+        setSavedPairs(savedData?.round?.results || []);
+      } else {
+        console.warn('Saved pairs fetch failed:', savedPairsRes.statusText);
+        setSavedPairs([]);
       }
 
        // Throw error only if essential fetches failed
@@ -230,6 +249,34 @@ export default function Round2() {
       // Clear message after 4 seconds ONLY if it wasn't an error
       setTimeout(() => { if (message.type === 'success' || message.type === 'info') setMessage({ text: '', type: 'info' })}, 4000);
     }
+  };
+
+  // --- Submit Pair Result (two teams make one potion) ---
+  const handleSubmitPair = async () => {
+    if (roundLocked) { setMessage({ text: 'Unlock the round to submit pairs.', type: 'error' }); setTimeout(() => setMessage({ text: '', type: 'info' }), 3000); return; }
+    if (!selectedTeam1 || !selectedTeam2 || !selectedPotionPair || pairPoints === '' || pairTime === '') {
+      setMessage({ text: 'Please select both teams, a potion, and enter points & time.', type: 'error' });
+      setTimeout(() => setMessage({ text: '', type: 'info' }), 4000);
+      return;
+    }
+    if (selectedTeam1 === selectedTeam2) { setMessage({ text: 'Team 1 and Team 2 cannot be the same.', type: 'error' }); setTimeout(() => setMessage({ text: '', type: 'info' }), 3000); return; }
+
+    setSavingPair(true); setMessage({ text: 'Saving pair result...', type: 'info' });
+    try {
+      const token = localStorage.getItem('token');
+      const payload = { team1Id: selectedTeam1, team2Id: selectedTeam2, potionId: selectedPotionPair, points: Number(pairPoints), time: Number(pairTime) };
+      const res = await fetch('/api/admin/round-2/submit-pair', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to save pair result');
+      setMessage({ text: 'Pair result saved.', type: 'success' });
+      // Clear form
+      setSelectedTeam1(''); setSelectedTeam2(''); setSelectedPotionPair(''); setPairPoints(''); setPairTime('');
+      // Refresh all data
+      await fetchData();
+    } catch (err: any) {
+      console.error('Submit Pair Error:', err);
+      setMessage({ text: `Failed to save pair: ${err.message}`, type: 'error' });
+    } finally { setSavingPair(false); setTimeout(() => { if (message.type !== 'error') setMessage({ text: '', type: 'info' }) }, 4000); }
   };
 
   // Toggle round lock status
@@ -488,38 +535,84 @@ export default function Round2() {
             </div>
         </div>
 
-        {/* Team Scoring Table */}
+        {/* Pair Submission (Two teams collaborate) */}
+        <div className="bg-gray-800 rounded-2xl p-6 mb-8 shadow-xl border-2 border-amber-900/40">
+             <h2 className="text-2xl text-amber-300 mb-4 font-semibold">Submit Pair Result (Teams working together)</h2>
+             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                <div className="flex flex-col">
+                    <label className="text-sm text-amber-200 mb-1">Team 1</label>
+                    <select value={selectedTeam1} onChange={(e) => setSelectedTeam1(e.target.value)} disabled={roundLocked || savingPair} className="bg-gray-700 border border-amber-900/50 rounded px-3 py-2 text-amber-100">
+                        <option value="">-- Select Team 1 --</option>
+                        {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                    </select>
+                </div>
+                <div className="flex flex-col">
+                    <label className="text-sm text-amber-200 mb-1">Team 2</label>
+                    <select value={selectedTeam2} onChange={(e) => setSelectedTeam2(e.target.value)} disabled={roundLocked || savingPair} className="bg-gray-700 border border-amber-900/50 rounded px-3 py-2 text-amber-100">
+                        <option value="">-- Select Team 2 --</option>
+                        {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+                    </select>
+                </div>
+                <div className="flex flex-col">
+                    <label className="text-sm text-amber-200 mb-1">Potion</label>
+                    <select value={selectedPotionPair} onChange={(e) => setSelectedPotionPair(e.target.value)} disabled={roundLocked || savingPair} className="bg-gray-700 border border-emerald-700/50 rounded px-3 py-2 text-emerald-100">
+                        <option value="">-- Select Potion --</option>
+                        {potions.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                    </select>
+                </div>
+                <div className="flex flex-col">
+                    <label className="text-sm text-amber-200 mb-1">Points (Each)</label>
+                    <input type="number" value={pairPoints} onChange={(e) => setPairPoints(e.target.value === '' ? '' : Number(e.target.value))} disabled={roundLocked || savingPair} className="bg-gray-700 border border-amber-900/50 rounded px-3 py-2 text-amber-100" placeholder="e.g., 50" />
+                </div>
+                <div className="flex flex-col">
+                    <label className="text-sm text-amber-200 mb-1">Time (Minutes)</label>
+                    <input type="number" value={pairTime} onChange={(e) => setPairTime(e.target.value === '' ? '' : Number(e.target.value))} disabled={roundLocked || savingPair} className="bg-gray-700 border border-amber-900/50 rounded px-3 py-2 text-amber-100" placeholder="e.g., 45" />
+                </div>
+             </div>
+             <div className="text-center mt-6">
+                <button onClick={handleSubmitPair} disabled={savingPair || roundLocked} className="bg-gradient-to-r from-blue-700 to-blue-900 text-blue-100 font-bold py-2 px-6 rounded-lg border border-blue-400/30 hover:from-blue-800 hover:to-blue-950 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{savingPair ? 'Saving...' : '💾 Submit Pair Result'}</button>
+             </div>
+        </div>
+
+        {/* Saved Pair Results Table */}
         <div className="bg-gray-800 rounded-2xl p-4 md:p-6 mb-8 shadow-xl border-2 border-amber-900/40">
-             <h2 className="text-2xl text-amber-300 mb-4 font-semibold">Update Team Performance</h2>
+             <h2 className="text-2xl text-amber-300 mb-4 font-semibold">Saved Pair Results</h2>
              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px]">
+                <table className="w-full min-w-[700px]">
                   <thead>
                     <tr className="border-b-2 border-amber-900/30 text-amber-400 text-sm uppercase">
-                      <th className="p-2 text-left">Team Name</th>
-                      <th className="p-2 text-left">House</th>
-                      <th className="p-2 text-center">Total Points</th>
-                      <th className="p-2 text-center">{roundConfig.scoringLabels.score} (+/-)</th>
-                      <th className="p-2 text-center">{roundConfig.scoringLabels.time}</th>
-                      <th className="p-2 text-center">Potion Created</th>
+                      <th className="p-2 text-left">Team 1</th>
+                      <th className="p-2 text-left">Team 2</th>
+                      <th className="p-2 text-left">Potion Created</th>
+                      <th className="p-2 text-center">Points Awarded</th>
+                      <th className="p-2 text-center">Time (Min)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {teams.map((team) => (
-                      <tr key={team._id} className="border-t border-amber-900/20 hover:bg-gray-700/40 transition-colors text-sm">
-                        <td className="p-2 font-medium">{team.name}</td>
-                        <td className="p-2">{team.house}</td>
-                        <td className="p-2 text-center text-amber-300 font-semibold">{team.totalPoints}</td>
-                        <td className="p-2 text-center"> <input type="number" value={team.score} onChange={(e) => handleTeamDataChange(team._id, 'score', e.target.value)} disabled={roundLocked} className={`w-20 bg-gray-700 border ${roundLocked ? 'border-gray-600' : 'border-amber-900/50'} rounded px-2 py-1 text-amber-100 text-center focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-60 disabled:cursor-not-allowed`} placeholder="0" /> </td>
-                        <td className="p-2 text-center"> <input type="number" min="0" value={team.time} onChange={(e) => handleTeamDataChange(team._id, 'time', e.target.value)} disabled={roundLocked} className={`w-20 bg-gray-700 border ${roundLocked ? 'border-gray-600' : 'border-amber-900/50'} rounded px-2 py-1 text-amber-100 text-center focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-60 disabled:cursor-not-allowed`} placeholder="0" /> </td>
-                        <td className="p-2 text-center"> <select value={team.potionCreatedRound2 ?? ""} onChange={(e) => handleTeamDataChange(team._id, 'potionCreatedRound2', e.target.value)} disabled={roundLocked} className={`w-48 bg-gray-700 border ${roundLocked ? 'border-gray-600' : 'border-emerald-700/50'} rounded px-2 py-1 text-emerald-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed`} > <option value="">-- None --</option> {potions.map(p => ( <option key={p._id} value={p._id}> {p.name} </option> ))} </select> </td>
-                      </tr>
-                    ))}
-                     {teams.length === 0 && !loading && ( <tr><td colSpan={6} className="text-center p-4 text-amber-200/70 italic">No active teams found for Round 2.</td></tr> )}
+                    {(() => {
+                      const filled = (savedPairs || []).filter((pair: any) => {
+                        // require two teams with names and points/time present
+                        const hasTeams = Array.isArray(pair.teams) && pair.teams.length >= 2 && pair.teams[0]?.name && pair.teams[1]?.name;
+                        const hasPoints = pair.points !== undefined && pair.points !== null;
+                        const hasTime = pair.time !== undefined && pair.time !== null;
+                        return hasTeams && hasPoints && hasTime;
+                      });
+                      if (filled.length === 0) {
+                        return <tr><td colSpan={5} className="text-center p-4 text-amber-200/70 italic">No pair results submitted for Round 2 yet.</td></tr>;
+                      }
+                      return filled.map((pair: any, index: number) => (
+                        <tr key={pair._id || index} className="border-t border-amber-900/20 hover:bg-gray-700/50 transition-colors text-sm">
+                          <td className="p-2 font-medium">{pair.teams?.[0]?.name} ({pair.teams?.[0]?.house || ''})</td>
+                          <td className="p-2 font-medium">{pair.teams?.[1]?.name} ({pair.teams?.[1]?.house || ''})</td>
+                          <td className="p-2 text-emerald-300">{pair.potionCreated?.name || pair.teams?.[0]?.potionCreatedName || pair.teams?.[1]?.potionCreatedName || ''}</td>
+                          <td className="p-2 text-center text-amber-300 font-semibold">{pair.points}</td>
+                          <td className="p-2 text-center">{pair.time}</td>
+                        </tr>
+                      ));
+                    })()}
                   </tbody>
                 </table>
               </div>
-              {/* Save Button */}
-              {!roundLocked && ( <div className="text-center mt-6"> <button onClick={saveRoundData} disabled={saving || roundLocked || addingPotion} className="bg-gradient-to-r from-blue-700 to-blue-900 text-blue-100 font-bold py-2 px-6 rounded-lg border border-blue-400/30 hover:from-blue-800 hover:to-blue-950 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" > {saving ? 'Saving...' : '💾 Save Round Data'} </button> </div> )}
         </div>
 
         {/* Award Quaffle Section */}
